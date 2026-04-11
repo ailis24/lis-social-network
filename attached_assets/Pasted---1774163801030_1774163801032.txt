@@ -1,0 +1,168 @@
+🔧 **ИСПРАВЬ ВСЕ ОШИБКИ С ЗАГОЛОВКАМИ И АВТОРИЗАЦИЕЙ**
+
+## ПРОБЛЕМЫ:
+
+❌ Не загружается аватарка — ошибка "Failed to fetch"
+❌ Не ставятся лайки на посты
+❌ Не отправляются комментарии
+❌ Ошибка "Unauthorized" или "Доступ запрещён"
+
+**ПРИЧИНА:** Фронтенд НЕ отправляет заголовок `X-User-Id` в запросах, поэтому сервер не может проверить кто делает запрос.
+
+---
+
+## ЧТО СДЕЛАТЬ:
+
+### 1. ОБНОВИ ВСЕ FETCH ЗАПРОСЫ В `src/services/ydb.js`:
+
+Добавь заголовок `X-User-Id` ко ВСЕМ запросам которые требуют авторизации:
+
+```javascript
+// ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ HEADERS
+function getAuthHeaders() {
+  const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+  const userId = currentUser?.uid || '';
+  
+  return {
+    'Content-Type': 'application/json',
+    'X-User-Id': userId,
+  };
+}
+
+// === ЗАГРУЗКА АВАТАРКИ ===
+export async function uploadAvatar(file) {
+  const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+  
+  if (!currentUser) {
+    throw new Error("Нужно войти");
+  }
+  
+  const formData = new FormData();
+  formData.append('avatar', file);
+  formData.append('userId', currentUser.uid);
+  
+  const response = await fetch('/api/users/upload-avatar', {
+    method: 'POST',
+    headers: {
+      'X-User-Id': currentUser.uid,  // <-- ВАЖНО!
+    },
+    body: formData,
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Ошибка загрузки аватарки");
+  }
+  
+  return response.json();
+}
+
+// === ЛАЙК ПОСТА ===
+export async function likePost(postId) {
+  const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+  
+  if (!currentUser) {
+    throw new Error("Нужно войти");
+  }
+  
+  const response = await fetch(`/api/posts/${postId}/like`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': currentUser.uid,  // <-- ВАЖНО!
+    },
+    body: JSON.stringify({
+      userId: currentUser.uid,
+      action: 'toggle',
+    }),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Ошибка при лайке");
+  }
+  
+  return response.json();
+}
+
+// === ДОБАВИТЬ КОММЕНТАРИЙ ===
+export async function addComment(postId, text) {
+  const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+  
+  if (!currentUser) {
+    throw new Error("Нужно войти");
+  }
+  
+  const response = await fetch(`/api/posts/${postId}/comments`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': currentUser.uid,  // <-- ВАЖНО!
+    },
+    body: JSON.stringify({
+      userId: currentUser.uid,
+      text: text,
+      username: currentUser.username,
+      avatar: currentUser.avatar || '',
+    }),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Ошибка при отправке комментария");
+  }
+  
+  return response.json();
+}
+
+// === ОБНОВЛЕНИЕ ПРОФИЛЯ ===
+export async function updateUserProfile(uid, data) {
+  const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+  
+  if (!currentUser) {
+    throw new Error("Нужно войти");
+  }
+  
+  const response = await fetch(`/api/users/${uid}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': currentUser.uid,  // <-- ВАЖНО!
+    },
+    body: JSON.stringify(data),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Ошибка обновления профиля");
+  }
+  
+  return response.json();
+}
+
+// === УДАЛИТЬ КОММЕНТАРИЙ ===
+export async function deleteComment(postId, commentId) {
+  const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+  
+  if (!currentUser) {
+    throw new Error("Нужно войти");
+  }
+  
+  const response = await fetch(`/api/posts/${postId}/comments/${commentId}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': currentUser.uid,  // <-- ВАЖНО!
+    },
+    body: JSON.stringify({
+      userId: currentUser.uid,
+    }),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Ошибка удаления комментария");
+  }
+  
+  return response.json();
+}

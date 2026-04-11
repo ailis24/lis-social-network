@@ -1,0 +1,181 @@
+🔧 **ИСПРАВЬ ВСЕ ОШИБКИ "Failed to fetch" И "Missing permissions"**
+
+## ПРОБЛЕМЫ (5 СКРИНШОТОВ):
+
+1. ❌ Загрузка аватарки — "Ошибка загрузки: Failed to fetch"
+2. ❌ Загрузка фото в ленту — "Ошибка при создании поста: Failed to fetch"
+3. ❌ Создание опроса — "Ошибка при создании поста: Failed to fetch"
+4. ❌ Загрузка сторис — "Ошибка загрузки: Failed to fetch"
+5. ❌ Создание группы — "Missing or insufficient permissions"
+
+**ПРИЧИНА:** 
+- Фронтенд не отправляет заголовок `X-User-Id`
+- Сервер не имеет правильных endpoint'ов или не проверяет авторизацию
+- CORS или network ошибки
+
+---
+
+## ЧТО СДЕЛАТЬ ПРЯМО СЕЙЧАС:
+
+### 1. ОБНОВИ `src/services/ydb.js` — ДОБАВЬ HEADERS КО ВСЕМ ЗАПРОСАМ:
+
+```javascript
+// ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ
+function getAuthHeaders(extraHeaders = {}) {
+  const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+  const userId = currentUser?.uid || '';
+  
+  return {
+    'Content-Type': 'application/json',
+    'X-User-Id': userId,
+    ...extraHeaders,
+  };
+}
+
+// === 1. ЗАГРУЗКА АВАТАРКИ ===
+export async function uploadAvatar(file) {
+  const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+  
+  if (!currentUser) {
+    throw new Error("Нужно войти в систему");
+  }
+  
+  const formData = new FormData();
+  formData.append('avatar', file);
+  formData.append('userId', currentUser.uid);
+  
+  try {
+    const response = await fetch('/api/users/upload-avatar', {
+      method: 'POST',
+      headers: {
+        'X-User-Id': currentUser.uid,
+      },
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Ошибка загрузки аватарки");
+    }
+    
+    const data = await response.json();
+    
+    // Обновляем localStorage с новым avatar
+    const updatedUser = { ...currentUser, avatar: data.avatarUrl };
+    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+    
+    return data;
+  } catch (error) {
+    console.error('Upload avatar error:', error);
+    throw error;
+  }
+}
+
+// === 2. ЗАГРУЗКА ФОТО В ЛЕНТУ (CREATE POST) ===
+export async function createPost(postData) {
+  const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+  
+  if (!currentUser) {
+    throw new Error("Нужно войти в систему");
+  }
+  
+  const response = await fetch('/api/posts', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      ...postData,
+      userId: currentUser.uid,
+      creatorId: currentUser.uid,
+      username: currentUser.username,
+      avatar: currentUser.avatar || '',
+    }),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Ошибка создания поста");
+  }
+  
+  return response.json();
+}
+
+// === 3. ЗАГРУЗКА СТОРИС ===
+export async function createStory(storyData) {
+  const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+  
+  if (!currentUser) {
+    throw new Error("Нужно войти в систему");
+  }
+  
+  const response = await fetch('/api/stories', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      ...storyData,
+      userId: currentUser.uid,
+      username: currentUser.username,
+      avatar: currentUser.avatar || '',
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 часа
+    }),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Ошибка создания сторис");
+  }
+  
+  return response.json();
+}
+
+// === 4. СОЗДАНИЕ ГРУППЫ ===
+export async function createGroup(groupData) {
+  const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+  
+  if (!currentUser) {
+    throw new Error("Нужно войти в систему");
+  }
+  
+  const response = await fetch('/api/groups', {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      ...groupData,
+      creatorId: currentUser.uid,
+      participants: [currentUser.uid, ...(groupData.participants || [])],
+      createdAt: new Date().toISOString(),
+    }),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Ошибка создания группы");
+  }
+  
+  return response.json();
+}
+
+// === 5. ДОБАВЛЕНИЕ УЧАСТНИКОВ В ГРУППУ ===
+export async function addGroupMembers(groupId, memberIds) {
+  const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+  
+  if (!currentUser) {
+    throw new Error("Нужно войти в систему");
+  }
+  
+  const response = await fetch(`/api/groups/${groupId}/members`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      memberIds,
+      addedBy: currentUser.uid,
+    }),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || "Ошибка добавления участников");
+  }
+  
+  return response.json();
+}

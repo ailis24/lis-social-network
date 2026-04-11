@@ -1,0 +1,43 @@
+{
+  "name": "lis-social-network",
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "diagnose": "node diagnose.cjs",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "node server.js",
+    "client": "vite --port 5173 --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node server.js",
+    "install:all": "npm install && npm install ydb-sdk@latest concurrently",
+    "clean": "rm -rf node_modules dist && npm install",
+    "restart": "pkill -f node && npm run dev"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1007.0",
+    "@emailjs/browser": "^4.4.1",
+    "@tailwindcss/postcss": "^4.0.0",
+    "@vitejs/plugin-react": "^4.3.2",
+    "@yandex-cloud/nodejs-sdk": "^2.8.0",
+    "autoprefixer": "^10.4.20",
+    "better-sqlite3": "^12.8.0",
+    "clsx": "^2.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "firebase": "^10.14.1",
+    "lucide-react": "^0.446.0",
+    "postcss": "^8.4.47",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.30.3",
+    "tailwind-merge": "^2.5.2",
+    "vite": "^5.4.8",
+    "ydb-sdk": "^5.11.1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "vite-plugin-image-optimizer": "^2.0.3"
+  }
+}
