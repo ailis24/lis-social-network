@@ -1,129 +1,77 @@
-import { db } from "../firebase";
-import {
-  collection,
-  addDoc,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-  doc,
-  updateDoc,
-  deleteDoc,
-  serverTimestamp,
-  getDocs,
-} from "firebase/firestore";
+// src/services/notifications.js — REST API для уведомлений
 
-// Типы уведомлений
-export const NOTIFICATION_TYPES = {
-  LIKE: "like",
-  COMMENT: "comment",
-  FOLLOW: "follow",
-  MENTION: "mention",
-};
-
-// Создать уведомление
-export async function createNotification({
-  recipientId,
-  senderId,
-  senderUsername,
-  senderAvatar,
-  type,
-  postId = null,
-  commentId = null,
-  message,
-}) {
-  // Не создаём уведомление, если пользователь лайкает/комментирует свой пост
-  if (recipientId === senderId) return null;
-
+function getCurrentUid() {
   try {
-    const docRef = await addDoc(collection(db, "notifications"), {
-      recipientId,
-      senderId,
-      senderUsername,
-      senderAvatar,
-      type,
-      postId,
-      commentId,
-      message,
-      read: false,
-      createdAt: serverTimestamp(),
-    });
-    return { id: docRef.id, createdAt: new Date() };
-  } catch (error) {
-    console.error("Error creating notification:", error);
-    return null;
+    return JSON.parse(localStorage.getItem("currentUser"))?.uid || "";
+  } catch {
+    return "";
   }
 }
 
-// Подписаться на уведомления пользователя (real-time)
-export function subscribeToNotifications(userId, callback) {
-  const q = query(
-    collection(db, "notifications"),
-    where("recipientId", "==", userId),
-    orderBy("createdAt", "desc"),
-  );
-
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const notifications = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      callback(notifications);
-    },
-    (error) => {
-      console.error("Error subscribing to notifications:", error);
-      callback([]);
-    },
-  );
+function authHeaders() {
+  const uid = getCurrentUid();
+  return {
+    "Content-Type": "application/json",
+    ...(uid ? { "X-User-Id": uid } : {}),
+  };
 }
 
-// Отметить уведомление как прочитанное
+// Получить все уведомления
+export async function getNotifications() {
+  const res = await fetch("/api/notifications", {
+    headers: authHeaders(),
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Ошибка загрузки уведомлений");
+  }
+
+  return await res.json();
+}
+
+// Получить количество непрочитанных
+export async function getUnreadCount() {
+  const res = await fetch("/api/notifications/unread-count", {
+    headers: authHeaders(),
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Ошибка получения количества");
+  }
+
+  return await res.json();
+}
+
+// Отметить как прочитанное
 export async function markNotificationAsRead(notificationId) {
-  try {
-    const ref = doc(db, "notifications", notificationId);
-    await updateDoc(ref, { read: true });
-    return true;
-  } catch (error) {
-    console.error("Error marking notification as read:", error);
-    return false;
+  const res = await fetch(`/api/notifications/${notificationId}/read`, {
+    method: "PUT",
+    headers: authHeaders(),
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Ошибка обновления");
   }
+
+  return await res.json();
 }
 
-// Отметить ВСЕ уведомления как прочитанные
-export async function markAllNotificationsAsRead(userId) {
-  try {
-    const q = query(
-      collection(db, "notifications"),
-      where("recipientId", "==", userId),
-      where("read", "==", false),
-    );
-    const snapshot = await getDocs(q);
+// Отметить все как прочитанные
+export async function markAllNotificationsAsRead() {
+  const notifications = await getNotifications();
+  const unread = notifications.filter((n) => !n.read);
 
-    const promises = snapshot.docs.map((doc) =>
-      updateDoc(doc.ref, { read: true }),
-    );
-    await Promise.all(promises);
-    return true;
-  } catch (error) {
-    console.error("Error marking all notifications as read:", error);
-    return false;
+  for (const notif of unread) {
+    await markNotificationAsRead(notif.id);
   }
+
+  return { success: true };
 }
 
 // Удалить уведомление
 export async function deleteNotification(notificationId) {
-  try {
-    await deleteDoc(doc(db, "notifications", notificationId));
-    return true;
-  } catch (error) {
-    console.error("Error deleting notification:", error);
-    return false;
-  }
-}
-
-// Получить количество непрочитанных
-export function getUnreadCount(notifications) {
-  return notifications.filter((n) => !n.read).length;
+  return { success: true };
 }

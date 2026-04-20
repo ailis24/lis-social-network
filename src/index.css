@@ -1,11 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Parisienne&display=swap');
 
-/* Tailwind CSS v4 */
-@import "tailwindcss";
-
-@theme {
-  --color-brand: #8b5cf6;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
@@ -156,7 +153,6 @@ img {
 }
 
 /* ✅ СТРАНИЦА СООБЩЕНИЙ (/messages) */
-
 .messages-page {
   background: linear-gradient(to bottom, #9333ea, #c084fc, #f3e8ff);
   min-height: 100vh;
@@ -307,7 +303,6 @@ img {
 }
 
 /* ✅ СТРАНИЦА ГРУППОВОГО ЧАТА (/messages/group/:id) */
-
 .group-chat-page {
   background: linear-gradient(to bottom, #9333ea, #c084fc, #f3e8ff);
   min-height: 100vh;
@@ -621,7 +616,6 @@ img {
 }
 
 /* ✅ МОДАЛЬНОЕ ОКНО: ДОБАВИТЬ УЧАСТНИКОВ */
-
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -819,7 +813,6 @@ img {
 }
 
 /* ✅ КНОПКА СОЗДАНИЯ ГРУППЫ (плавающая) */
-
 .fab-create {
   position: fixed;
   bottom: 6rem;
@@ -850,7 +843,6 @@ img {
 }
 
 /* ✅ УТИЛИТЫ */
-
 /* Скрыть скроллбар но оставить прокрутку */
 .scrollbar-hide {
   -ms-overflow-style: none;
@@ -897,7 +889,6 @@ img {
 }
 
 /* ✅ АДАПТИВНОСТЬ */
-
 /* Планшеты */
 @media (max-width: 1024px) {
   .group-chat-messages {

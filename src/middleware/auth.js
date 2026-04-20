@@ -1,10 +1,4 @@
-// Server-side auth middleware (аналог Firebase Rules)
-
-/**
- * requireAuth(db)
- * Проверяет заголовок X-User-Id и верифицирует пользователя в БД.
- * Записывает req.uid при успехе.
- */
+// Server-side auth middleware
 export function requireAuth(db) {
   return (req, res, next) => {
     const uid = req.headers["x-user-id"];
@@ -20,12 +14,6 @@ export function requireAuth(db) {
   };
 }
 
-/**
- * isOwner(getOwnerUid)
- * Проверяет, что req.uid совпадает с uid владельца ресурса.
- * getOwnerUid: функция (req) => string | строка
- * Должен применяться ПОСЛЕ requireAuth.
- */
 export function isOwner(getOwnerUid) {
   return (req, res, next) => {
     const ownerUid =
@@ -37,11 +25,6 @@ export function isOwner(getOwnerUid) {
   };
 }
 
-/**
- * allowFields(...fields)
- * Фильтрует req.body — оставляет только разрешённые поля.
- * Защищает от массового присвоения (mass assignment).
- */
 export function allowFields(...fields) {
   return (req, res, next) => {
     const filtered = {};

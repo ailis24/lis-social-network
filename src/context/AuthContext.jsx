@@ -1,135 +1,53 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { authService } from "../services";
 
 const AuthContext = createContext(null);
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
-}
-
-export function AuthProvider({ children }) {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [userData, setUserData] = useState(null);
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // 🔷 Проверка сессии при загрузке приложения
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const savedUser = localStorage.getItem("lis_user");
-        if (savedUser) {
-          const user = JSON.parse(savedUser);
-          // Проверяем валидность пользователя через API
-          const res = await fetch(`/api/users/${user.uid}`, {
-            headers: { "X-User-Id": user.uid },
-          });
-          if (res.ok) {
-            const data = await res.json();
-            setCurrentUser(user);
-            setUserData(data);
-          } else {
-            // Сессия невалидна — очищаем
-            localStorage.removeItem("lis_user");
-          }
-        }
-      } catch (error) {
-        console.error("Auth check error:", error);
-        localStorage.removeItem("lis_user");
-      } finally {
-        setLoading(false);
-      }
-    };
-    checkAuth();
+    const storedUser = authService.getCurrentUser();
+    if (storedUser) {
+      setUser(storedUser);
+    }
+    setLoading(false);
   }, []);
 
-  // 🔷 Логин
-  const login = async (loginInput, password) => {
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ login: loginInput, password }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        localStorage.setItem("lis_user", JSON.stringify(data.user));
-        setCurrentUser(data.user);
-        setUserData(data.user);
-        return { success: true };
-      }
-      return { success: false, error: data.error };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
+  const login = async (username, password) => {
+    const userData = await authService.login(username, password);
+    setUser(userData);
+    return userData;
   };
 
-  // 🔷 Регистрация
-  const register = async (username, phone, password, email) => {
-    try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, phone, password, email }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        localStorage.setItem("lis_user", JSON.stringify(data.user));
-        setCurrentUser(data.user);
-        setUserData(data.user);
-        return { success: true };
-      }
-      return { success: false, error: data.error };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
+  const register = async (username, password) => {
+    const userData = await authService.register(username, password);
+    setUser(userData);
+    return userData;
   };
 
-  // 🔷 Логаут
   const logout = () => {
-    localStorage.removeItem("lis_user");
-    setCurrentUser(null);
-    setUserData(null);
-    return { success: true };
+    authService.logout();
+    setUser(null);
   };
 
-  // 🔷 Обновление данных пользователя
-  const updateUserData = async (updates) => {
-    if (!currentUser) return { success: false, error: "Not authenticated" };
-    try {
-      const res = await fetch(`/api/users/${currentUser.uid}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "X-User-Id": currentUser.uid,
-        },
-        body: JSON.stringify(updates),
-      });
-      if (res.ok) {
-        const updated = { ...currentUser, ...updates };
-        localStorage.setItem("lis_user", JSON.stringify(updated));
-        setCurrentUser(updated);
-        setUserData(updated);
-        return { success: true };
-      }
-      const data = await res.json();
-      return { success: false, error: data.error };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
+  const updateUser = (updatedData) => {
+    setUser((prev) => ({ ...prev, ...updatedData }));
+    localStorage.setItem("user", JSON.stringify({ ...user, ...updatedData }));
   };
 
-  const value = {
-    currentUser,
-    userData,
-    loading,
-    login,
-    register,
-    logout,
-    updateUserData,
-  };
+  return (
+    <AuthContext.Provider
+      value={{ user, loading, login, register, logout, updateUser }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+};
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
+  return context;
+};

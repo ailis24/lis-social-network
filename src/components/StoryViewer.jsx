@@ -1,13 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
-import { deleteStory } from "../services/stories";
 
-const STORY_DURATION = 5000;
+const STORY_DURATION = 5000; // 5 секунд на сторис
 
 export default function StoryViewer({
-  userId,
-  initialIndex,
   storiesByUser,
+  initialIndex,
   onClose,
   onNextUser,
   onPrevUser,
@@ -20,7 +18,6 @@ export default function StoryViewer({
   const storyTimeout = useRef(null);
 
   const currentStory = storiesByUser[currentIndex];
-  const isOwner = currentStory?.userId === currentUser?.uid;
 
   useEffect(() => {
     if (!isPaused && currentStory) {
@@ -48,7 +45,7 @@ export default function StoryViewer({
 
   const handleNext = () => {
     if (currentIndex < storiesByUser.length - 1) {
-      setCurrentIndex(currentIndex + 1);
+      setCurrentIndex((prev) => prev + 1);
       setProgress(0);
     } else {
       onNextUser();
@@ -57,25 +54,10 @@ export default function StoryViewer({
 
   const handlePrev = () => {
     if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
+      setCurrentIndex((prev) => prev - 1);
       setProgress(0);
     } else {
       onPrevUser();
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!confirm("Удалить эту сторис?")) return;
-
-    const result = await deleteStory(currentStory.id, currentUser.uid);
-    if (result.success) {
-      if (storiesByUser.length === 1) {
-        onClose();
-      } else {
-        handleNext();
-      }
-    } else {
-      alert("Ошибка: " + result.error);
     }
   };
 
@@ -87,10 +69,10 @@ export default function StoryViewer({
   return (
     <div
       className="fixed inset-0 bg-black z-50 flex items-center justify-center"
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
       onMouseDown={handleTouchStart}
       onMouseUp={handleTouchEnd}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     >
       {/* Прогресс бары */}
       <div className="absolute top-0 left-0 right-0 z-10 p-2 flex gap-1">
@@ -115,62 +97,44 @@ export default function StoryViewer({
       </div>
 
       {/* Шапка */}
-      <div className="absolute top-6 left-0 right-0 z-10 flex items-center justify-between px-4">
-        <div className="flex items-center gap-2">
+      <div className="absolute top-8 left-0 right-0 z-10 flex items-center justify-between px-4">
+        <div className="flex items-center gap-3">
           <img
             src={currentStory.avatar}
-            alt={currentStory.username}
-            className="w-8 h-8 rounded-full border-2 border-white"
+            alt=""
+            className="w-10 h-10 rounded-full border border-white/50"
           />
-          <span className="text-white font-semibold text-sm">
+          <span className="text-white font-semibold drop-shadow-md">
             {currentStory.username}
           </span>
-          <span className="text-white/70 text-xs">
-            {new Date(
-              currentStory.createdAt?.toDate?.() || currentStory.createdAt,
-            ).toLocaleTimeString("ru-RU", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </span>
         </div>
-        <div className="flex items-center gap-2">
-          {isOwner && (
-            <button
-              onClick={handleDelete}
-              className="text-white/70 hover:text-white text-sm px-3 py-1"
-            >
-              Удалить
-            </button>
-          )}
-          <button
-            onClick={onClose}
-            className="text-white/70 hover:text-white text-2xl"
-          >
-            ✕
-          </button>
-        </div>
+        <button
+          onClick={onClose}
+          className="text-white text-3xl drop-shadow-md"
+        >
+          &times;
+        </button>
       </div>
 
-      {/* Контент сторис — ТЕПЕРЬ И ФОТО, И ВИДЕО */}
-      <div className="w-full h-full flex items-center justify-center">
-        {currentStory.mediaType === "video" ? (
+      {/* Контент сторис */}
+      <div className="w-full h-full flex items-center justify-center bg-gray-900">
+        {currentStory.media_type === "video" ? (
           <video
-            src={currentStory.mediaUrl}
+            src={currentStory.media}
             autoPlay
-            className="w-full h-full object-contain"
+            className="max-w-full max-h-full object-contain"
           />
         ) : (
           <img
-            src={currentStory.mediaUrl || currentStory.imageUrl}
+            src={currentStory.media}
             alt="Story"
-            className="w-full h-full object-contain"
+            className="max-w-full max-h-full object-contain"
           />
         )}
       </div>
 
-      {/* Навигация */}
-      <div className="absolute inset-0 flex">
+      {/* Зоны нажатия */}
+      <div className="absolute inset-0 flex z-0">
         <div className="w-1/3 h-full cursor-pointer" onClick={handlePrev} />
         <div className="w-1/3 h-full" />
         <div className="w-1/3 h-full cursor-pointer" onClick={handleNext} />

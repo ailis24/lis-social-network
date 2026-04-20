@@ -12,26 +12,33 @@ export function usePremium() {
 }
 
 export function PremiumProvider({ children }) {
-  const { currentUser } = useAuth();
+  const { user: currentUser } = useAuth();
   const [isPremium, setIsPremium] = useState(false);
-  const [expiresAt, setExpiresAt] = useState(null);
+  const [premiumExpires, setPremiumExpires] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!currentUser) {
       setIsPremium(false);
+      setPremiumExpires(null);
       setLoading(false);
       return;
     }
 
     const checkPremium = async () => {
       try {
-        const res = await fetch("/api/premium/status");
-        const data = await res.json();
-        setIsPremium(data.isPremium);
-        setExpiresAt(data.expiresAt);
+        const res = await fetch("/api/premium/status", {
+          headers: { "X-User-Id": currentUser.uid },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setIsPremium(data.isPremium || false);
+          setPremiumExpires(data.expiresAt || null);
+        }
       } catch (error) {
-        console.error("Premium check error:", error);
+        console.error("Check premium error:", error);
+        setIsPremium(false);
       } finally {
         setLoading(false);
       }
@@ -40,54 +47,11 @@ export function PremiumProvider({ children }) {
     checkPremium();
   }, [currentUser]);
 
-  const activatePremium = async (paymentMethod) => {
-    try {
-      // 🔷 ДЛЯ СБП ВРУЧНУЮ — вызываем claim endpoint
-      if (paymentMethod === "sbp_manual") {
-        const res = await fetch("/api/premium/claim", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            transactionInfo: "СБП перевод на карту",
-            paymentProof: "manual_confirmation",
-          }),
-        });
-
-        const data = await res.json();
-        if (data.success) {
-          setIsPremium(true);
-          setExpiresAt(data.expiresAt);
-          return { success: true, message: data.message };
-        }
-        return { success: false, error: data.error };
-      }
-
-      // 🔷 ДЛЯ ДРУГИХ МЕТОДОВ (будущее: Юмани, карты и т.д.)
-      const res = await fetch("/api/premium/activate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentMethod }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setIsPremium(true);
-        setExpiresAt(data.expiresAt);
-        return { success: true };
-      }
-      return { success: false, error: data.error };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  };
-
   const value = {
     isPremium,
-    expiresAt,
+    premiumExpires,
     loading,
-    activatePremium,
-    price: 199,
-    currency: "RUB",
+    setIsPremium, // для тестов/отладки
   };
 
   return (

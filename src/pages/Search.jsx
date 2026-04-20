@@ -1,142 +1,97 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Header from "../components/Header";
 import BottomNav from "../components/BottomNav";
 
 export default function Search() {
-  const { currentUser } = useAuth();
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
+  const { currentUser } = useAuth();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Поиск в реальном времени через API
-  useEffect(() => {
-    const delayDebounce = setTimeout(async () => {
-      if (searchQuery.trim().length >= 2) {
-        await handleSearch();
-      } else {
-        setSearchResults([]);
-      }
-    }, 300);
-    return () => clearTimeout(delayDebounce);
-  }, [searchQuery]);
-
-  async function handleSearch() {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      return;
-    }
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!query.trim()) return;
 
     setLoading(true);
     try {
-      let q = searchQuery.trim();
-      if (q.startsWith("@")) q = q.slice(1);
+      const res = await fetch(
+        `/api/users/search?query=${encodeURIComponent(query)}`,
+        {
+          headers: { "X-User-Id": currentUser.uid },
+        },
+      );
 
-      const res = await fetch(`/api/users/search?q=${encodeURIComponent(q)}`);
       if (res.ok) {
-        const users = await res.json();
-        // Исключаем себя из результатов
-        const filtered = users.filter((u) => u.uid !== currentUser?.uid);
-        setSearchResults(filtered);
+        const data = await res.json();
+        setResults(data);
       }
     } catch (error) {
       console.error("Search error:", error);
     } finally {
       setLoading(false);
     }
-  }
-
-  function goToProfile(userId) {
-    navigate(`/profile/${userId}`);
-  }
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-400 via-purple-500 to-pink-400 pb-20">
+    <div className="min-h-screen bg-gradient-to-b from-purple-600 via-purple-300 to-white pb-20">
       <Header />
-      <div className="max-w-2xl mx-auto pt-8 px-4">
-        {/* Поиск */}
-        <div className="bg-white rounded-3xl shadow-xl p-6 mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">
-            🔍 Поиск пользователей
-          </h1>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Введите @ник или username..."
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 transition-colors"
-            style={{ color: "#000000" }}
-          />
-        </div>
 
-        {/* Результаты */}
-        {loading && (
-          <div className="bg-white rounded-3xl shadow-xl p-8 text-center">
-            <div className="text-4xl mb-4">⏳</div>
-            <p className="text-gray-500">Поиск...</p>
+      <div className="max-w-2xl mx-auto pt-4 px-4">
+        <h1 className="text-2xl font-bold text-white mb-4 text-center">
+          🔍 Поиск
+        </h1>
+
+        <form onSubmit={handleSearch} className="mb-6">
+          <div className="relative">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Введите никнейм..."
+              className="w-full pl-10 pr-4 py-3 rounded-xl border-none shadow-lg focus:ring-2 focus:ring-purple-500"
+            />
+            <span className="absolute left-3 top-3.5 text-gray-400">🔍</span>
           </div>
-        )}
+        </form>
 
-        {searchResults.length === 0 &&
-          searchQuery.trim().length >= 2 &&
-          !loading && (
-            <div className="bg-white rounded-3xl shadow-xl p-8 text-center">
-              <div className="text-6xl mb-4">😕</div>
-              <p className="text-gray-500 text-lg">Никто не найден</p>
-              <p className="text-gray-400 text-sm mt-2">
-                Попробуйте другой логин
-              </p>
-            </div>
-          )}
+        {loading && <div className="text-center text-white py-4">Поиск...</div>}
 
-        {searchResults.length > 0 && (
-          <div className="bg-white rounded-3xl shadow-xl p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Найдено: {searchResults.length}
-            </h2>
-            <div className="space-y-3">
-              {searchResults.map((user) => (
-                <div
-                  key={user.uid}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
-                  onClick={() => goToProfile(user.uid)}
-                >
-                  <div className="flex items-center space-x-3">
-                    <img
-                      src={user.avatar || "/fox.gif"}
-                      alt={user.username}
-                      className="w-10 h-10 rounded-full object-cover border-2 border-purple-300"
-                    />
-                    <div>
-                      <div className="font-semibold text-gray-900">
-                        @{user.username}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {user.followers?.length || 0} подписчиков
-                      </div>
-                    </div>
-                  </div>
-                  <button className="text-purple-600 hover:text-purple-700 font-semibold text-sm">
-                    Перейти →
-                  </button>
+        {results.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-white/80 font-medium px-2">Результаты:</p>
+            {results.map((user) => (
+              <div
+                key={user.uid}
+                onClick={() => navigate(`/profile/${user.uid}`)}
+                className="bg-white/90 backdrop-blur-sm rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:bg-white transition-all"
+              >
+                <img
+                  src={user.avatar || "/fox.gif"}
+                  alt=""
+                  className="w-12 h-12 rounded-full object-cover border border-purple-200"
+                />
+                <div>
+                  <p className="font-bold text-gray-800">@{user.username}</p>
+                  <p className="text-sm text-gray-500 truncate">
+                    {user.bio || "Нет описания"}
+                  </p>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         )}
 
-        {!searchQuery && (
-          <div className="bg-white rounded-3xl shadow-xl p-8 text-center">
-            <div className="text-6xl mb-4">🔍</div>
-            <p className="text-gray-500 text-lg">Введите логин для поиска</p>
-            <p className="text-gray-400 text-sm mt-2">
-              Результаты появятся автоматически
-            </p>
+        {!loading && results.length === 0 && query && (
+          <div className="text-center py-10 text-white/80">
+            <p className="text-4xl mb-2">😕</p>
+            <p>Никого не найдено</p>
           </div>
         )}
       </div>
+
       <BottomNav />
     </div>
   );

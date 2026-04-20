@@ -1,249 +1,360 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
-import Header from "../components/Header";
-import BottomNav from "../components/BottomNav";
-import ChatItem from "../components/ChatItem";
-import GroupCreateModal from "../components/GroupCreateModal";
+import { messageService, userService } from "../services";
+import { PaperClipIcon, ArrowUpIcon } from "@heroicons/react/24/outline";
 
-export default function Messages() {
-  const navigate = useNavigate();
-  const { currentUser } = useAuth();
-
-  const [groups, setGroups] = useState([]);
-  const [conversations, setConversations] = useState([]);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [loading, setLoading] = useState(true);
+const Conversation = ({ conversation, onSelect, isActive }) => {
+  const [lastMessage, setLastMessage] = useState("");
+  const [participants, setParticipants] = useState([]);
 
   useEffect(() => {
-    if (!currentUser) return;
-    loadChats();
-  }, [currentUser]);
+    const loadLastMessageAndParticipants = async () => {
+      try {
+        const messages = await messageService.getMessages(conversation.id);
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg) {
+          setLastMessage(lastMsg.text || "Media message");
+        }
 
-  async function loadChats() {
-    try {
-      setLoading(true);
-
-      // 🔧 ПРЯМОЙ FETCH С ЗАГОЛОВКАМИ
-      const headers = { "X-User-Id": currentUser.uid };
-
-      // Загружаем группы
-      const groupsRes = await fetch("/api/groups", { headers });
-      const groupsData = groupsRes.ok ? await groupsRes.json() : [];
-
-      // Загружаем личные чаты
-      const convsRes = await fetch(`/api/conversations/${currentUser.uid}`);
-      const convsData = convsRes.ok ? await convsRes.json() : [];
-
-      setGroups(groupsData || []);
-      setConversations(convsData || []);
-    } catch (error) {
-      console.error("Error loading chats:", error);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const handleOpenChat = (chat, type) => {
-    if (type === "personal" && chat.otherUser?.uid) {
-      navigate(`/messages/${chat.otherUser.uid}`);
-    } else if (type === "group" && chat.id) {
-      navigate(`/messages/group/${chat.id}`);
-    }
-  };
-
-  // 🔷 УДАЛЕНИЕ ГРУППЫ (только создатель)
-  const handleDeleteGroup = async (groupId, groupName) => {
-    if (
-      !confirm(`Удалить группу "${groupName}"?\nЭто действие нельзя отменить!`)
-    )
-      return;
-
-    try {
-      const res = await fetch(`/api/groups/${groupId}`, {
-        method: "DELETE",
-        headers: { "X-User-Id": currentUser.uid },
-      });
-
-      if (res.ok) {
-        setGroups(groups.filter((g) => g.id !== groupId));
-        alert("✅ Группа удалена");
-      } else {
-        const err = await res.json();
-        alert("Ошибка: " + err.error);
+        // Load participant info
+        const otherParticipantId = conversation.participants.find(
+          (id) => id !== conversation.participants[0],
+        );
+        if (otherParticipantId) {
+          const user = await userService.getProfile(otherParticipantId);
+          setParticipants([user]);
+        }
+      } catch (error) {
+        console.error("Error loading conversation data:", error);
       }
+    };
+
+    loadLastMessageAndParticipants();
+  }, [conversation.id, conversation.participants]);
+
+  return (
+    <div
+      onClick={() => onSelect(conversation)}
+      className={`p-3 border-b border-gray-200 cursor-pointer hover:bg-gray-50 ${
+        isActive ? "bg-blue-50 border-r-2 border-r-blue-500" : ""
+      }`}
+    >
+      <div className="flex items-center space-x-3">
+        <div className="w-12 h-12 bg-gray-300 rounded-full flex items-center justify-center">
+          <span className="text-sm font-medium text-gray-600">
+            {participants[0]?.username?.charAt(0)?.toUpperCase() || "U"}
+          </span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-medium text-gray-900 truncate">
+            {conversation.name || participants[0]?.username || "Unknown"}
+          </h3>
+          <p className="text-sm text-gray-500 truncate">{lastMessage}</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Message = ({ message, isCurrentUser }) => {
+  return (
+    <div
+      className={`flex ${isCurrentUser ? "justify-end" : "justify-start"} mb-4`}
+    >
+      <div
+        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+          isCurrentUser ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-800"
+        }`}
+      >
+        {message.text && <p className="break-words">{message.text}</p>}
+
+        {message.file_url && (
+          <div className="mt-2">
+            {message.file_type === "image" ? (
+              <img
+                src={message.file_url}
+                alt="Attachment"
+                className="max-w-full h-auto rounded"
+              />
+            ) : (
+              <video controls className="max-w-full rounded">
+                <source src={message.file_url} type="video/mp4" />
+              </video>
+            )}
+          </div>
+        )}
+
+        <p
+          className={`text-xs mt-1 ${isCurrentUser ? "text-blue-100" : "text-gray-500"}`}
+        >
+          {new Date(message.created_at).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </p>
+      </div>
+    </div>
+  );
+};
+
+const Messages = () => {
+  const { user } = useAuth();
+  const [conversations, setConversations] = useState([]);
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState("");
+  const [attachment, setAttachment] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    loadConversations();
+  }, []);
+
+  useEffect(() => {
+    if (selectedConversation) {
+      loadMessages(selectedConversation.id);
+    }
+  }, [selectedConversation]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const loadConversations = async () => {
+    try {
+      const data = await messageService.getConversations();
+      setConversations(data);
     } catch (error) {
-      console.error("Error deleting group:", error);
-      alert("Ошибка удаления");
+      console.error("Error loading conversations:", error);
     }
   };
 
-  const handleCreateGroup = async (groupName, participantIds) => {
+  const loadMessages = async (conversationId) => {
     try {
-      const res = await fetch("/api/groups", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-User-Id": currentUser.uid,
-        },
-        body: JSON.stringify({
-          name: groupName,
-          participants: participantIds,
-        }),
-      });
-
-      if (!res.ok) throw new Error("Ошибка создания группы");
-
-      const result = await res.json();
-      setShowCreateModal(false);
-      loadChats();
-      if (result?.id) navigate(`/messages/group/${result.id}`);
+      const data = await messageService.getMessages(conversationId);
+      setMessages(data);
     } catch (error) {
-      console.error("Error creating group:", error);
-      alert("Ошибка создания группы");
+      console.error("Error loading messages:", error);
     }
   };
 
-  const handleSearchUsers = async (query) => {
-    if (query.length < 2) return [];
+  const handleSelectConversation = async (conversation) => {
+    setSelectedConversation(conversation);
+    setShowSearchResults(false);
+    await loadMessages(conversation.id);
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if ((!newMessage.trim() && !attachment) || !selectedConversation) return;
+
     try {
-      const res = await fetch(
-        `/api/users/search?q=${encodeURIComponent(query)}`,
+      await messageService.sendMessage(
+        selectedConversation.id,
+        newMessage,
+        attachment,
       );
-      return res.ok ? await res.json() : [];
+      setNewMessage("");
+      setAttachment(null);
+      // Reload messages to get the new one
+      await loadMessages(selectedConversation.id);
     } catch (error) {
-      console.error("Search error:", error);
-      return [];
+      console.error("Error sending message:", error);
     }
+  };
+
+  const handleSearch = async (term) => {
+    if (term.length < 2) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    try {
+      const results = await userService.search(term);
+      setSearchResults(results.filter((u) => u.uid !== user.uid)); // Exclude current user
+      setShowSearchResults(true);
+    } catch (error) {
+      console.error("Error searching users:", error);
+    }
+  };
+
+  const handleCreateConversation = async (userId, name) => {
+    try {
+      await messageService.createConversation(userId, name);
+      await loadConversations();
+      setShowSearchResults(false);
+      setSearchTerm("");
+    } catch (error) {
+      console.error("Error creating conversation:", error);
+    }
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-purple-600 via-purple-300 to-white pb-24">
-      <Header />
+    <div className="max-w-6xl mx-auto px-4 py-8 h-[calc(100vh-10rem)] flex">
+      {/* Sidebar */}
+      <div className="w-80 bg-white rounded-lg shadow-md mr-6 flex flex-col">
+        <div className="p-4 border-b border-gray-200">
+          <h2 className="text-lg font-bold text-gray-900">Messages</h2>
 
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-        {/* 👥 Группы */}
-        <section>
-          <h2 className="text-lg font-bold text-white/90 mb-3 flex items-center gap-2">
-            <span>👥</span> Группы
-          </h2>
-          {loading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 p-3 bg-white/20 rounded-xl animate-pulse"
-                >
-                  <div className="w-12 h-12 rounded-full bg-white/30"></div>
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-white/30 rounded w-3/4"></div>
-                    <div className="h-3 bg-white/20 rounded w-1/2"></div>
+          <div className="mt-3 relative">
+            <input
+              type="text"
+              placeholder="Search users..."
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                handleSearch(e.target.value);
+              }}
+              onFocus={() => searchTerm && setShowSearchResults(true)}
+            />
+
+            {showSearchResults && (
+              <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
+                {searchResults.map((user) => (
+                  <div
+                    key={user.uid}
+                    className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    onClick={() =>
+                      handleCreateConversation(user.uid, user.username)
+                    }
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-medium text-gray-600">
+                          {user.username?.charAt(0)?.toUpperCase()}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {user.username}
+                        </p>
+                        <p className="text-sm text-gray-500 truncate max-w-32">
+                          {user.bio}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : groups.length === 0 ? (
-            <div className="text-center py-8 text-white/80">
-              <p className="text-lg">Нет групп</p>
-              <p className="text-sm text-white/60">Создай первую группу!</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {groups.map((group) => (
-                <div key={group.id} className="relative">
-                  <ChatItem
-                    avatar={group.avatar}
-                    name={group.name}
-                    lastMessage={group.lastMessage}
-                    timestamp={group.lastMessageTime}
-                    participants={group.participants?.length}
-                    onClick={() => handleOpenChat(group, "group")}
-                  />
+                ))}
 
-                  {/* 🔴 КНОПКА УДАЛЕНИЯ (только для создателя) */}
-                  {group.creatorId === currentUser.uid && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteGroup(group.id, group.name);
-                      }}
-                      className="absolute top-2 right-12 p-2 bg-red-500/80 hover:bg-red-600 text-white rounded-full transition-colors z-10"
-                      title="Удалить группу (вы создатель)"
-                    >
-                      <span className="text-sm">🗑️</span>
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* 💬 Личные чаты */}
-        <section>
-          <h2 className="text-lg font-bold text-white/90 mb-3 flex items-center gap-2">
-            <span>💬</span> Личные чаты
-          </h2>
-          {loading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 p-3 bg-white/20 rounded-xl animate-pulse"
-                >
-                  <div className="w-12 h-12 rounded-full bg-white/30"></div>
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-white/30 rounded w-3/4"></div>
-                    <div className="h-3 bg-white/20 rounded w-1/2"></div>
+                {searchResults.length === 0 && (
+                  <div className="p-3 text-center text-gray-500">
+                    No users found
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : conversations.length === 0 ? (
-            <div className="text-center py-8 text-white/80">
-              <p className="text-lg">Нет личных чатов</p>
-              <p className="text-sm text-white/60">
-                Напиши кому-нибудь первым!
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {conversations.map((conv) => (
-                <ChatItem
-                  key={conv.id}
-                  avatar={conv.otherUser?.avatar}
-                  name={conv.otherUser?.username}
-                  lastMessage={conv.lastMessage}
-                  timestamp={conv.lastMessageTime}
-                  online={conv.otherUser?.online}
-                  onClick={() => handleOpenChat(conv, "personal")}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {conversations.map((conversation) => (
+            <Conversation
+              key={conversation.id}
+              conversation={conversation}
+              onSelect={handleSelectConversation}
+              isActive={selectedConversation?.id === conversation.id}
+            />
+          ))}
+        </div>
       </div>
 
-      {/* ✏️ КНОПКА СОЗДАНИЯ ГРУППЫ */}
-      <button
-        onClick={() => setShowCreateModal(true)}
-        className="fixed bottom-24 right-6 w-14 h-14 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full shadow-lg hover:shadow-xl flex items-center justify-center text-2xl transition-transform hover:scale-110 active:scale-95"
-        title="Создать группу"
-      >
-        ✏️
-      </button>
+      {/* Chat Area */}
+      <div className="flex-1 bg-white rounded-lg shadow-md flex flex-col">
+        {selectedConversation ? (
+          <>
+            {/* Chat Header */}
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">
+                {selectedConversation.name || "Conversation"}
+              </h3>
+            </div>
 
-      <BottomNav />
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {messages.map((message) => (
+                <Message
+                  key={message.id}
+                  message={message}
+                  isCurrentUser={message.sender_id === user.uid}
+                />
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
 
-      {/* 🪟 МОДАЛЬНОЕ ОКНО */}
-      {showCreateModal && (
-        <GroupCreateModal
-          onClose={() => setShowCreateModal(false)}
-          onCreateGroup={handleCreateGroup}
-          onSearchUsers={handleSearchUsers}
-          currentUserId={currentUser?.uid}
-        />
-      )}
+            {/* Message Input */}
+            <div className="p-4 border-t border-gray-200">
+              <form
+                onSubmit={handleSendMessage}
+                className="flex items-center space-x-3"
+              >
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="image/*,video/*"
+                    className="hidden"
+                    id="attachment"
+                    onChange={(e) => setAttachment(e.target.files[0])}
+                  />
+                  <label
+                    htmlFor="attachment"
+                    className="cursor-pointer text-gray-500 hover:text-blue-600"
+                  >
+                    <PaperClipIcon className="w-6 h-6" />
+                  </label>
+                </div>
+
+                <input
+                  type="text"
+                  placeholder="Type a message..."
+                  className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                />
+
+                <button
+                  type="submit"
+                  className="bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600"
+                >
+                  <ArrowUpIcon className="w-5 h-5" />
+                </button>
+              </form>
+
+              {attachment && (
+                <div className="mt-2 flex items-center justify-between bg-gray-100 p-2 rounded">
+                  <span className="text-sm text-gray-600 truncate">
+                    {attachment.name}
+                  </span>
+                  <button
+                    onClick={() => setAttachment(null)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <p className="text-gray-500">
+                Select a conversation to start messaging
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
-}
+};
+
+export default Messages;

@@ -1,130 +1,134 @@
-import { useState, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import {
+  BellIcon,
+  MagnifyingGlassIcon,
+  ChatBubbleLeftRightIcon,
+} from "@heroicons/react/24/outline";
 
-export default function Header() {
+const Header = () => {
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const { currentUser } = useAuth();
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  const [notificationCount, setNotificationCount] = useState(0);
-  const [chatCount, setChatCount] = useState(0);
-
-  const isActive = (path) => location.pathname === path;
-
-  // 🔷 Обновляем счетчики
   useEffect(() => {
-    if (!currentUser) return;
-
-    const getCounts = async () => {
+    const fetchNotifications = async () => {
       try {
-        const headers = { "X-User-Id": currentUser.uid }; // 🔧 Добавили заголовок!
-
-        const [notifRes, chatRes] = await Promise.all([
-          fetch("/api/notifications/unread-count", { headers }),
-          fetch("/api/conversations/unread-total", { headers }),
-        ]);
-
-        const notifData = await notifRes.json();
-        const chatData = await chatRes.json();
-        setNotificationCount(notifData.count || 0);
-        setChatCount(chatData.total || 0);
+        const data = await import("../services").then((mod) =>
+          mod.notificationService.getNotifications(),
+        );
+        setNotifications(data);
+        setUnreadCount(data.filter((n) => !n.is_read).length);
       } catch (error) {
-        console.error("Error getting counts:", error);
+        console.error("Error fetching notifications:", error);
       }
     };
 
-    getCounts();
-    const interval = setInterval(getCounts, 10000);
-    return () => clearInterval(interval);
-  }, [currentUser]);
+    if (user) {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 30000); // Refresh every 30 seconds
+      return () => clearInterval(interval);
+    }
+  }, [user]);
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
 
   return (
-    <header className="bg-gradient-to-b from-purple-600 via-purple-500 to-purple-400 shadow-sm sticky top-0 z-50">
-      <div className="max-w-2xl mx-auto px-2 py-2">
+    <header className="bg-white shadow-sm border-b">
+      <div className="max-w-6xl mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
-          {/* Левая часть */}
-          <div className="flex items-center gap-1">
-            <Link
-              to="/photo-chain"
-              className={`flex flex-col items-center p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-all backdrop-blur-sm min-w-[50px] ${
-                isActive("/photo-chain") ? "bg-white/30 scale-105" : ""
-              }`}
-              title="Фото-эстафета"
-            >
-              <span className="text-xl">📸</span>
-              <span className="text-[9px] text-white/90 font-medium leading-tight">
-                Эстафета
-              </span>
-            </Link>
-            <Link
-              to="/fitness"
-              className={`flex flex-col items-center p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-all backdrop-blur-sm min-w-[50px] ${
-                isActive("/fitness") ? "bg-white/30 scale-105" : ""
-              }`}
-              title="Фитнес-челленджи"
-            >
-              <span className="text-xl">💪</span>
-              <span className="text-[9px] text-white/90 font-medium leading-tight">
-                Фитнес
-              </span>
-            </Link>
-          </div>
-
-          {/* Логотип */}
-          <Link
-            to="/"
-            className="text-3xl font-bold px-2"
-            style={{
-              fontFamily: "'Parisienne', cursive",
-              textShadow: "2px 2px 4px rgba(0,0,0,0.3)",
-            }}
-          >
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-pink-500 to-red-500">
-              Lis
-            </span>
+          <Link to="/" className="text-2xl font-bold text-blue-600">
+            LIS Social
           </Link>
 
-          {/* Правая часть */}
-          <div className="flex items-center gap-1">
+          <nav className="hidden md:flex space-x-8">
             <Link
-              to="/notifications"
-              className={`relative flex flex-col items-center p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-all backdrop-blur-sm min-w-[50px] ${
-                isActive("/notifications") ? "bg-white/30 scale-105" : ""
-              }`}
-              title="Уведомления"
+              to="/"
+              className="text-gray-700 hover:text-blue-600 transition-colors"
             >
-              <span className="text-xl">🔔</span>
-              {notificationCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold border-2 border-purple-500">
-                  {notificationCount > 9 ? "9+" : notificationCount}
+              Home
+            </Link>
+            <Link
+              to="/search"
+              className="text-gray-700 hover:text-blue-600 transition-colors"
+            >
+              Search
+            </Link>
+            <Link
+              to={`/profile/${user?.uid}`}
+              className="text-gray-700 hover:text-blue-600 transition-colors"
+            >
+              Profile
+            </Link>
+            <Link
+              to="/messages"
+              className="text-gray-700 hover:text-blue-600 transition-colors flex items-center gap-1"
+            >
+              Messages
+              {unreadCount > 0 && (
+                <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {unreadCount}
                 </span>
               )}
-              <span className="text-[9px] text-white/90 font-medium leading-tight mt-0.5">
-                Увед.
-              </span>
             </Link>
+          </nav>
 
+          <div className="flex items-center space-x-4">
             <button
               onClick={() => navigate("/messages")}
-              className={`relative flex flex-col items-center p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-all backdrop-blur-sm min-w-[50px] ${
-                isActive("/messages") ? "bg-white/30 scale-105" : ""
-              }`}
-              title="Сообщения"
+              className="p-2 hover:bg-gray-100 rounded-full relative"
             >
-              <span className="text-xl">💬</span>
-              {chatCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold border-2 border-purple-500">
-                  {chatCount > 9 ? "9+" : chatCount}
+              <ChatBubbleLeftRightIcon className="w-6 h-6 text-gray-600" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {unreadCount}
                 </span>
               )}
-              <span className="text-[9px] text-white/90 font-medium leading-tight mt-0.5">
-                Чат
-              </span>
             </button>
+
+            <button
+              onClick={() => navigate("/search")}
+              className="p-2 hover:bg-gray-100 rounded-full"
+            >
+              <MagnifyingGlassIcon className="w-6 h-6 text-gray-600" />
+            </button>
+
+            <div className="flex items-center space-x-3">
+              {user?.avatar ? (
+                <img
+                  src={user.avatar}
+                  alt={user.username}
+                  className="w-8 h-8 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
+                  <span className="text-sm font-medium text-gray-600">
+                    {user?.username?.charAt(0)?.toUpperCase()}
+                  </span>
+                </div>
+              )}
+
+              <span className="hidden sm:block text-sm font-medium text-gray-700">
+                {user?.username}
+              </span>
+
+              <button
+                onClick={handleLogout}
+                className="text-sm text-red-600 hover:text-red-800 transition-colors"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </div>
     </header>
   );
-}
+};
+
+export default Header;

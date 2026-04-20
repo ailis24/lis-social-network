@@ -1,139 +1,90 @@
-import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-export default function Login() {
-  const [identifier, setIdentifier] = useState("");
+const Login = () => {
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [userCount, setUserCount] = useState(0);
-  const navigate = useNavigate();
   const { login } = useAuth();
-
-  // 🔷 Получаем счетчик пользователей
-  useEffect(() => {
-    const getCount = async () => {
-      try {
-        const res = await fetch("/api/health");
-        const data = await res.json();
-        setUserCount(data.users || 0);
-      } catch (error) {
-        console.error("Error getting user count:", error);
-      }
-    };
-    getCount();
-  }, []);
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    setLoading(true);
 
     try {
-      const result = await login(identifier, password);
-
-      if (result.success) {
-        console.log("✅ Logged in");
-        navigate("/");
-      } else {
-        setError(result.error || "Ошибка входа");
-      }
+      await login(username, password);
+      navigate("/");
     } catch (err) {
-      console.error("Login Error:", err);
-      setError(err.message || "Ошибка при входе");
-    } finally {
-      setLoading(false);
+      setError(err.message);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-400 via-purple-500 to-pink-400 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md">
-        <div className="text-center mb-8">
-          {/* 🦊 Логотип - картинка вместо эмодзи */}
-          <img
-            src="/fox.gif"
-            alt="Lis"
-            className="w-24 h-24 mx-auto mb-4 object-contain"
-          />
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            Sign in to your account
+          </h2>
+        </div>
 
-          {/* ✨ Красивый шрифт Parisienne */}
-          <h1
-            className="text-6xl mb-2 text-pink-500"
-            style={{ fontFamily: "'Parisienne', cursive" }}
-          >
-            Lis
-          </h1>
-          <p className="text-gray-600 mb-2">Социальная сеть</p>
-
-          {/* 🔢 Счетчик пользователей */}
-          {userCount > 0 && (
-            <p className="text-sm text-purple-600 mt-2 font-semibold bg-purple-50 py-1 px-3 rounded-full inline-block">
-              🦊 Нас уже {userCount}{" "}
-              {userCount === 1
-                ? "человек"
-                : userCount < 5
-                  ? "человека"
-                  : "человек"}
-              !
-            </p>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              {error}
+            </div>
           )}
-        </div>
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-4 text-sm">
-            {error}
+          <div className="rounded-md shadow-sm space-y-4">
+            <div>
+              <input
+                type="text"
+                required
+                className="appearance-none rounded-md relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <input
+                type="password"
+                required
+                className="appearance-none rounded-md relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
           </div>
-        )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <input
-              type="text"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              placeholder="📱 Телефон или username"
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 transition-colors"
-              disabled={loading}
-              autoComplete="username"
-              required
-            />
-          </div>
-          <div>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="🔒 Пароль"
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 transition-colors"
-              disabled={loading}
-              autoComplete="current-password"
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading || !identifier.trim() || !password}
-            className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? "⏳ Вход..." : "🔐 Войти"}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center">
-          <p className="text-gray-600">
-            Нет аккаунта?{" "}
-            <Link
-              to="/register"
-              className="text-purple-600 hover:text-purple-800 font-semibold hover:underline"
+            <button
+              type="submit"
+              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
-              Зарегистрироваться
-            </Link>
-          </p>
-        </div>
+              Sign in
+            </button>
+          </div>
+
+          <div className="text-center">
+            <p className="text-sm text-gray-600">
+              Don't have an account?{" "}
+              <a
+                href="/register"
+                className="font-medium text-blue-600 hover:text-blue-500"
+              >
+                Register here
+              </a>
+            </p>
+          </div>
+        </form>
       </div>
     </div>
   );
-}
+};
+
+export default Login;

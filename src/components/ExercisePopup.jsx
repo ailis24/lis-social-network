@@ -1,226 +1,182 @@
 import { useState } from "react";
 import { useFitness } from "../context/FitnessContext";
+import { useAuth } from "../context/AuthContext";
 
 export default function ExercisePopup() {
   const {
-    showExercisePopup,
     currentExercise,
     completeExercise,
     declineExercise,
-    setIsRecording,
     setShowExercisePopup,
   } = useFitness();
-  const [isRecording, setIsRecordingLocal] = useState(false);
+  const { currentUser } = useAuth();
+
+  const [isRecording, setIsRecording] = useState(false);
   const [mediaStream, setMediaStream] = useState(null);
   const [recordedChunks, setRecordedChunks] = useState([]);
   const [videoUrl, setVideoUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
 
-  if (!showExercisePopup || !currentExercise) return null;
-
-  // 🔷 Начать запись
+  // 🔧 Запись видео
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "user",
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
+        video: { facingMode: "user", width: 720, height: 720 },
         audio: false,
       });
       setMediaStream(stream);
-      setIsRecordingLocal(true);
       setIsRecording(true);
       setRecordedChunks([]);
 
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: "video/webm",
       });
+
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0)
+        if (event.data.size > 0) {
           setRecordedChunks((prev) => [...prev, event.data]);
+        }
       };
+
       mediaRecorder.start();
 
-      // Автоматическая остановка через 15 секунд
+      // Авто-стоп через 10 секунд
       setTimeout(() => {
-        if (mediaRecorder.state === "recording") mediaRecorder.stop();
-      }, 15000);
+        if (mediaRecorder.state === "recording") {
+          mediaRecorder.stop();
+        }
+      }, 10000);
 
-      mediaRecorder.onstop = async () => {
+      mediaRecorder.onstop = () => {
         const blob = new Blob(recordedChunks, { type: "video/webm" });
         const url = URL.createObjectURL(blob);
         setVideoUrl(url);
-        stream.getTracks().forEach((track) => track.stop());
-        setMediaStream(null);
-        setIsRecordingLocal(false);
         setIsRecording(false);
+        // Останавливаем камеру
+        stream.getTracks().forEach((track) => track.stop());
       };
     } catch (error) {
-      console.error("Camera error:", error);
-      alert(
-        "❌ Не удалось получить доступ к камере. Проверьте разрешения в браузере.",
-      );
+      console.error("❌ Camera Error:", error);
+      alert("Не удалось включить камеру. Проверьте разрешения!");
     }
   };
 
-  // 🔷 Отправить выполнение — ИСПРАВЛЕНО: загрузка через upload.js + отправка на сервер
+  // 🔧 Отправка видео
   const handleSubmit = async () => {
-    if (!videoUrl) {
-      alert("Сначала запишите видео!");
-      return;
-    }
+    if (recordedChunks.length === 0) return;
     setUploading(true);
 
     try {
-      // Загружаем видео через upload сервис
-      const response = await fetch(videoUrl);
-      const blob = await response.blob();
-
-      // Конвертируем в base64 для отправки
+      const blob = new Blob(recordedChunks, { type: "video/webm" });
       const reader = new FileReader();
+
       reader.onloadend = async () => {
         const base64 = reader.result;
-
-        // Отправляем на сервер для разблокировки
+        // Вызываем функцию из контекста
         const result = await completeExercise(base64);
 
         if (result.success) {
+          alert("🎉 Отлично! Лента разблокирована!");
           setShowExercisePopup(false);
-          alert("✅ Упражнение выполнено! Лента разблокирована на 30 минут 💪");
         } else {
-          alert("❌ Ошибка: " + (result.error || "Неизвестная ошибка"));
+          alert("Ошибка: " + result.error);
         }
         setUploading(false);
       };
+
       reader.readAsDataURL(blob);
     } catch (error) {
-      console.error("Submit error:", error);
-      alert("❌ Ошибка отправки: " + error.message);
+      console.error("Submit Error:", error);
       setUploading(false);
     }
   };
 
-  // 🔷 Отмена
+  // 🔧 Отказ от упражнения
   const handleDecline = async () => {
-    if (confirm("⚠️ Вы уверены? Лента будет заблокирована на 30 минут")) {
+    if (confirm("Вы уверены? Лента заблокируется на 30 минут.")) {
       const result = await declineExercise();
       if (result.success) {
         setShowExercisePopup(false);
-        alert("⏰ Лента заблокирована. Возвращайтесь через 30 минут!");
-      } else {
-        alert("❌ Ошибка: " + (result.error || "Неизвестная ошибка"));
       }
     }
   };
 
-  // 🔷 Перезаписать видео
-  const handleReRecord = () => {
-    if (videoUrl) URL.revokeObjectURL(videoUrl);
-    setVideoUrl(null);
-    setRecordedChunks([]);
-    startRecording();
-  };
+  if (!currentExercise) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-3xl p-6 max-w-md w-full">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl animate-fade-in-up">
+        {/* Заголовок */}
         <div className="text-center mb-6">
-          <div className="text-6xl mb-4">💪</div>
-          <h2 className="text-2xl font-bold text-purple-600 mb-2">
-            Время фитнеса!
+          <div className="text-5xl mb-2">🦊</div>
+          <h2 className="text-2xl font-bold text-purple-600">
+            Время разминки!
           </h2>
-          <p className="text-gray-600">Вы провели 10 минут в приложении</p>
+          <p className="text-gray-500 text-sm mt-1">
+            Вы сидели в приложении 10 минут
+          </p>
         </div>
 
-        <div className="bg-purple-50 rounded-xl p-4 mb-6">
-          <p className="text-sm text-purple-600 mb-1">Упражнение от:</p>
-          <div className="flex items-center gap-3 mb-3">
-            <img
-              src={currentExercise.avatar || "/fox.gif"}
-              alt="Avatar"
-              className="w-10 h-10 rounded-full"
-            />
-            <span className="font-semibold">
-              @{currentExercise.username || currentExercise.anonymous_author}
-            </span>
-          </div>
-          <h3 className="text-xl font-bold text-gray-800 mb-2">
-            {currentExercise.exercise_name || currentExercise.exerciseName}
+        {/* Карточка упражнения */}
+        <div className="bg-purple-50 rounded-2xl p-4 mb-6 border border-purple-100">
+          <h3 className="font-bold text-gray-800 text-lg">
+            {currentExercise.exercise_name || "Приседания"}
           </h3>
-          {(currentExercise.exercise_description ||
-            currentExercise.exerciseDescription) && (
-            <p className="text-gray-600 text-sm">
-              {currentExercise.exercise_description ||
-                currentExercise.exerciseDescription}
-            </p>
-          )}
+          <p className="text-purple-600 text-sm mt-1">
+            {currentExercise.exercise_description || "Сделай 20 раз!"}
+          </p>
         </div>
 
-        {videoUrl ? (
-          <div className="mb-4">
+        {/* Область видео */}
+        <div className="mb-6 bg-gray-100 rounded-2xl h-64 flex items-center justify-center overflow-hidden relative">
+          {isRecording ? (
+            <div className="text-center">
+              <div className="text-4xl animate-pulse mb-2">🎥</div>
+              <p className="text-red-500 font-bold">Идёт запись...</p>
+              <p className="text-xs text-gray-500">10 секунд</p>
+            </div>
+          ) : videoUrl ? (
             <video
               src={videoUrl}
               controls
-              className="w-full rounded-xl bg-black"
+              className="w-full h-full object-cover"
             />
-            <p className="text-center text-xs text-gray-500 mt-1">
-              Просмотрите запись перед отправкой
-            </p>
-          </div>
-        ) : isRecording ? (
-          <div className="mb-4 bg-black rounded-xl p-6">
-            <div className="text-center text-white">
-              <div className="animate-pulse text-5xl mb-3">🎥</div>
-              <p className="font-semibold">Запись...</p>
-              <p className="text-sm text-gray-400">
-                Остановится автоматически через 15 сек
-              </p>
+          ) : (
+            <div className="text-center text-gray-400">
+              <p className="text-4xl mb-2">📷</p>
+              <p>Камера выключена</p>
             </div>
-          </div>
-        ) : null}
+          )}
+        </div>
 
+        {/* Кнопки действий */}
         <div className="space-y-3">
           {!videoUrl && !isRecording && (
             <button
               onClick={startRecording}
-              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-xl font-semibold hover:shadow-lg transition-all"
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-xl font-bold hover:shadow-lg transition-all"
             >
-              🎥 Начать запись (15 сек)
+              🎥 Начать запись
             </button>
           )}
 
           {videoUrl && (
-            <>
-              <button
-                onClick={handleSubmit}
-                disabled={uploading}
-                className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50"
-              >
-                {uploading ? "⏳ Отправка..." : "✅ Выполнено! Разблокировать"}
-              </button>
-              <button
-                onClick={handleReRecord}
-                className="w-full border-2 border-purple-300 text-purple-600 py-3 rounded-xl font-semibold hover:bg-purple-50 transition-all"
-              >
-                🔄 Перезаписать
-              </button>
-            </>
+            <button
+              onClick={handleSubmit}
+              disabled={uploading}
+              className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-50"
+            >
+              {uploading ? "⏳ Отправка..." : "✅ Я выполнил! Разблокировать"}
+            </button>
           )}
 
           <button
             onClick={handleDecline}
-            className="w-full bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-300 transition-all"
+            className="w-full bg-gray-200 text-gray-600 py-3 rounded-xl font-semibold hover:bg-gray-300 transition-all"
           >
-            ❌ Отмена (блок 30 мин)
+            ❌ Отказаться (блок 30 мин)
           </button>
         </div>
-
-        <p className="text-xs text-center text-gray-400 mt-4">
-          💡 Совет: запишите приседания, отжимания или планку — любое упражнение
-          подойдёт!
-        </p>
       </div>
     </div>
   );
