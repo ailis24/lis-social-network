@@ -1,12 +1,13 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-const Register = () => {
+export default function Register() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
@@ -14,99 +15,88 @@ const Register = () => {
     e.preventDefault();
     setError("");
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
+    if (password !== confirm) {
+      setError("Пароли не совпадают");
       return;
     }
-
     if (password.length < 6) {
-      setError("Password must be at least 6 characters long");
+      setError("Пароль должен содержать минимум 6 символов");
       return;
     }
 
+    setLoading(true);
     try {
       await register(username, password);
       navigate("/");
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Ошибка регистрации");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Create a new account
-          </h2>
+    <div className="min-h-screen bg-gradient-to-b from-purple-700 via-purple-400 to-purple-100 flex items-center justify-center px-4">
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-8">
+          <h1 className="lis-logo text-6xl mb-2">Lis</h1>
+          <p className="text-white/80 text-sm">Социальная сеть</p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <div className="bg-white/95 rounded-3xl shadow-2xl p-8">
+          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Регистрация</h2>
+
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl mb-4">
               {error}
             </div>
           )}
 
-          <div className="rounded-md shadow-sm space-y-4">
-            <div>
-              <input
-                type="text"
-                required
-                className="appearance-none rounded-md relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <input
-                type="password"
-                required
-                className="appearance-none rounded-md relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <input
-                type="password"
-                required
-                className="appearance-none rounded-md relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Confirm Password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <input
+              type="text"
+              required
+              autoComplete="username"
+              placeholder="Никнейм"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-400 bg-gray-50 text-gray-800"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+            <input
+              type="password"
+              required
+              autoComplete="new-password"
+              placeholder="Пароль (минимум 6 символов)"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-400 bg-gray-50 text-gray-800"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <input
+              type="password"
+              required
+              autoComplete="new-password"
+              placeholder="Повторите пароль"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-400 bg-gray-50 text-gray-800"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+            />
             <button
               type="submit"
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              disabled={loading}
+              className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl hover:shadow-lg transition-all disabled:opacity-50"
             >
-              Sign up
+              {loading ? "Создание аккаунта..." : "Зарегистрироваться"}
             </button>
-          </div>
+          </form>
 
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
-              Already have an account?{" "}
-              <a
-                href="/login"
-                className="font-medium text-blue-600 hover:text-blue-500"
-              >
-                Sign in here
-              </a>
-            </p>
-          </div>
-        </form>
+          <p className="text-center text-sm text-gray-500 mt-6">
+            Уже есть аккаунт?{" "}
+            <Link to="/login" className="text-purple-600 font-semibold hover:underline">
+              Войти
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );
-};
-
-export default Register;
+}

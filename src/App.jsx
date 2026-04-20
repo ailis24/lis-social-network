@@ -1,93 +1,90 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { FitnessProvider } from "./context/FitnessContext";
 import { PremiumProvider } from "./context/PremiumContext";
 import Header from "./components/Header";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import Feed from "./pages/Feed";
-import Profile from "./pages/Profile";
-import Messages from "./pages/Messages";
-import Search from "./pages/Search";
+
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const Feed = lazy(() => import("./pages/Feed"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Messages = lazy(() => import("./pages/Messages"));
+const Search = lazy(() => import("./pages/Search"));
+
+const PageLoader = () => (
+  <div className="flex items-center justify-center py-20">
+    <div className="animate-spin rounded-full h-10 w-10 border-4 border-purple-400 border-t-transparent" />
+  </div>
+);
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
-  if (loading) return null;
-  return user ? children : <Navigate to="/login" />;
+  if (loading) return <PageLoader />;
+  return user ? children : <Navigate to="/login" replace />;
 };
 
+const AppLayout = ({ children }) => (
+  <>
+    <Header />
+    <main className="pt-2 pb-20 sm:pb-4">
+      {children}
+    </main>
+  </>
+);
+
 function AppRoutes() {
+  const { user } = useAuth();
+
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      <Route
-        path="/"
-        element={
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+        <Route path="/register" element={user ? <Navigate to="/" replace /> : <Register />} />
+
+        <Route path="/" element={
           <ProtectedRoute>
-            <>
-              <Header />
-              <Feed />
-            </>
+            <AppLayout><Feed /></AppLayout>
           </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/profile/:uid"
-        element={
+        } />
+
+        <Route path="/profile/:uid" element={
           <ProtectedRoute>
-            <>
-              <Header />
-              <Profile />
-            </>
+            <AppLayout><Profile /></AppLayout>
           </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/profile"
-        element={
+        } />
+
+        <Route path="/profile" element={
           <ProtectedRoute>
-            <>
-              <Header />
-              <Profile />
-            </>
+            <AppLayout><Profile /></AppLayout>
           </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/messages"
-        element={
+        } />
+
+        <Route path="/messages" element={
           <ProtectedRoute>
-            <>
-              <Header />
-              <Messages />
-            </>
+            <AppLayout><Messages /></AppLayout>
           </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/search"
-        element={
+        } />
+
+        <Route path="/search" element={
           <ProtectedRoute>
-            <>
-              <Header />
-              <Search />
-            </>
+            <AppLayout><Search /></AppLayout>
           </ProtectedRoute>
-        }
-      />
-    </Routes>
+        } />
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
 
-function App() {
+export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <PremiumProvider>
           <FitnessProvider>
-            <div className="min-h-screen">
+            <div className="min-h-screen bg-gradient-to-b from-purple-700 via-purple-400 to-purple-100">
               <AppRoutes />
             </div>
           </FitnessProvider>
@@ -96,5 +93,3 @@ function App() {
     </BrowserRouter>
   );
 }
-
-export default App;
