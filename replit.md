@@ -1,54 +1,74 @@
-# Project Overview
+# Lis — Социальная сеть
 
-A social media app called "Lis" built with React, Vite, and an Express backend. Users can register/login, post content, follow others, search users, chat, and receive notifications.
+## Стек технологий
+- **Frontend**: React 18 + Vite (порт 5000)
+- **Backend**: Express.js + SQLite через `better-sqlite3` (порт 3001)
+- **CSS**: Tailwind CSS v3, кастомный index.css
+- **Auth**: JWT (токен хранится в localStorage)
+- **Запуск**: `concurrently` — оба сервиса через `npm run dev`
 
-## Tech Stack
-
-- **Frontend**: React 18 + Vite (port 5000)
-- **Backend**: Express.js (port 3000, in-memory database)
-- **Styling**: Tailwind CSS
-- **Routing**: React Router DOM v6
-- **Icons**: Lucide React
-- **Process manager**: concurrently (runs both frontend and backend)
-
-## Project Structure
-
+## Структура проекта
 ```
 src/
-  components/    # Reusable UI components (Avatar, BottomNav, Header, Post)
-  context/       # React context (AuthContext)
-  pages/         # Route pages (Feed, Login, Register, Profile, CreatePost, Notifications, Search, Chat)
-  services/      # API and cloud service integration
-  firebase.js    # Firebase initialization
-  main.jsx       # App entry point with BrowserRouter
-  App.jsx        # Route definitions
-server.js        # Express backend API (auth, users, posts stubs)
+  App.jsx               # Маршрутизация, lazy loading, провайдеры
+  main.jsx              # Точка входа React
+  index.css             # Глобальные стили (Tailwind + кастомные)
+  context/
+    AuthContext.jsx     # Авторизация, user, login/logout/register
+    FitnessContext.jsx  # Таймер активности (не используется в UI напрямую)
+    PremiumContext.jsx  # Премиум-статус пользователя
+  components/
+    Header.jsx          # Шапка с градиентом, уведомления, мобильный nav
+  pages/
+    Login.jsx           # Вход
+    Register.jsx        # Регистрация
+    Feed.jsx            # Лента, истории, таймер 10 мин, создание постов
+    Profile.jsx         # Профиль, редактирование, выход, добавление в друзья
+    Messages.jsx        # Личные сообщения, polling 5с
+    Search.jsx          # Поиск пользователей в реальном времени
+  services/
+    index.js            # Все API-методы (auth, posts, messages, friends, stories, notifications, timer)
+server.js               # Express API (SQLite, JWT, multer для файлов)
+lis_users.db            # База данных SQLite
 ```
 
-## Configuration
+## API Endpoints (server.js)
+- `POST /api/auth/register` — регистрация
+- `POST /api/auth/login` — вход
+- `GET/PUT /api/users/:uid` — профиль
+- `POST /api/users/avatar` — загрузка аватара
+- `GET /api/users/search?q=` — поиск пользователей
+- `GET/POST /api/posts` — лента и создание постов
+- `POST /api/posts/:id/like` — лайк
+- `GET/POST /api/posts/:id/comments` — комментарии
+- `GET/POST /api/messages/conversations` — чаты
+- `GET/POST/DELETE /api/messages/:id` — сообщения
+- `POST /api/friends/request` — запрос в друзья
+- `POST /api/friends/accept` — принять запрос
+- `GET/POST /api/stories` — истории
+- `GET/PUT /api/notifications` — уведомления
+- `GET/POST /api/feed-timer` — таймер ленты
 
-- **Dev server**: Vite on port 5000, host 0.0.0.0, allowedHosts: true
-- **API server**: Express on port 3000
-- **Vite proxy**: /api → http://localhost:3000
+## Ключевые особенности
+- Фиолетово-розовый градиентный дизайн по всему приложению
+- Логотип «Lis» в каллиграфическом шрифте Parisienne
+- Таймер ленты: 10 минут → модал с выбором (упражнение или перерыв 30 мин)
+- Бар историй с просмотром
+- Поиск в реальном времени (с дебаунсом 300мс)
+- Сообщения с автообновлением каждые 5 секунд
+- Мобильная нижняя навигация (на экранах < sm)
+- Lazy loading страниц через React.lazy + Suspense
+- Все тексты UI на русском языке
 
-## Running
+## AuthContext
+- Экспортирует `user` (не `currentUser`)
+- Методы: `login`, `register`, `logout`, `updateUser`
 
+## Переменные окружения
+- `JWT_SECRET` — секрет для JWT (по умолчанию `lis_users_secret_key_2024`)
+- `VITE_API_URL` — URL бэкенда (по умолчанию `http://localhost:3001`)
+
+## Запуск
 ```bash
-npm run dev    # Starts both frontend (5000) and backend (3000) via concurrently
-npm run build  # Build frontend to dist/
-npm run server # Start only the Express backend
-npm run client # Start only the Vite dev server
+npm run dev   # запускает сервер (3001) и клиент (5000) одновременно
 ```
-
-## Storage
-
-- **Primary**: SQLite via `better-sqlite3` — file: `lis_users.db` in project root
-- **Persistent**: data survives server restarts (stored on disk)
-- **Tables**: `users` with indexes on `username` (case-insensitive) and `phone`
-- **YDB**: code is removed; `AQV...` static keys only work for S3, not YDB gRPC. For YDB, a service account authorized key (RSA JSON) is required.
-
-## Deployment
-
-- **Target**: VM (always running)
-- **Build**: npm run build
-- **Run**: bash -c "npm run server & npx vite preview --port 5000 --host 0.0.0.0"
