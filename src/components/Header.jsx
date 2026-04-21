@@ -84,7 +84,14 @@ export default function Header() {
           <Link to="/" className="lis-logo text-2xl text-white text-center select-none">
             Lis
           </Link>
-          <div className="flex justify-end">
+          <div className="flex justify-end items-center gap-2">
+            <Link
+              to="/messages"
+              title="Сообщения"
+              className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-xl transition-all"
+            >
+              💬
+            </Link>
             <Link to={`/profile/${user?.uid}`} className="flex items-center">
               {user?.avatar ? (
                 <img

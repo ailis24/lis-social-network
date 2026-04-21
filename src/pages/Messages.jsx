@@ -2,9 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { messageService, userService } from "../services";
-import { PaperClipIcon } from "@heroicons/react/24/outline";
+import { PaperClipIcon, UserPlusIcon, UsersIcon } from "@heroicons/react/24/outline";
 
-// ─── Message bubble ────────────────────────────────────────────────────────────
 const MessageBubble = ({ message, isOwn, onDelete }) => (
   <div className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-3 group`}>
     <div className="max-w-xs lg:max-w-md">
@@ -13,7 +12,7 @@ const MessageBubble = ({ message, isOwn, onDelete }) => (
           @{message.username}
         </Link>
       )}
-      <div className={`px-4 py-2.5 rounded-2xl shadow-sm message-bubble ${
+      <div className={`px-4 py-2.5 rounded-2xl shadow-sm ${
         isOwn
           ? "bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-br-sm"
           : "bg-white text-gray-800 rounded-bl-sm"
@@ -21,11 +20,9 @@ const MessageBubble = ({ message, isOwn, onDelete }) => (
         {message.file_url && (
           <div className="mb-2">
             {message.file_type === "image" ? (
-              <img src={message.file_url} alt="Attachment" loading="lazy" className="max-w-full rounded-xl" />
+              <img src={message.file_url} alt="" loading="lazy" className="max-w-full rounded-xl" />
             ) : (
-              <video controls className="max-w-full rounded-xl">
-                <source src={message.file_url} />
-              </video>
+              <video controls className="max-w-full rounded-xl"><source src={message.file_url} /></video>
             )}
           </div>
         )}
@@ -35,10 +32,7 @@ const MessageBubble = ({ message, isOwn, onDelete }) => (
         </p>
       </div>
       {isOwn && (
-        <button
-          onClick={() => onDelete(message.id)}
-          className="text-xs text-red-400 hover:text-red-600 mt-1 hidden group-hover:block"
-        >
+        <button onClick={() => onDelete(message.id)} className="text-xs text-red-400 hover:text-red-600 mt-1 hidden group-hover:block">
           Удалить
         </button>
       )}
@@ -46,19 +40,18 @@ const MessageBubble = ({ message, isOwn, onDelete }) => (
   </div>
 );
 
-// ─── Conversation item ─────────────────────────────────────────────────────────
 const ConversationItem = ({ conv, isActive, onClick, currentUserId }) => {
   const [otherUser, setOtherUser] = useState(null);
 
   useEffect(() => {
-    const otherUid = conv.participants?.find((id) => id !== currentUserId);
-    if (otherUid) {
-      userService.getProfile(otherUid).then(setOtherUser).catch(() => {});
+    if (conv.type !== "group") {
+      const otherUid = conv.participants?.find((id) => id !== currentUserId);
+      if (otherUid) userService.getProfile(otherUid).then(setOtherUser).catch(() => {});
     }
-  }, [conv.id, currentUserId]);
+  }, [conv.id, currentUserId, conv.type]);
 
-  const name = conv.type === "group" ? conv.name : otherUser?.username || "...";
-  const avatar = conv.type === "group" ? null : otherUser?.avatar;
+  const isGroup = conv.type === "group";
+  const name = isGroup ? conv.name : otherUser?.username || "...";
 
   return (
     <button
@@ -67,26 +60,149 @@ const ConversationItem = ({ conv, isActive, onClick, currentUserId }) => {
         isActive ? "bg-purple-100 border border-purple-300" : "hover:bg-gray-50"
       }`}
     >
-      {avatar ? (
-        <img src={avatar} alt={name} loading="lazy" className="w-11 h-11 rounded-full object-cover flex-shrink-0" />
+      {!isGroup && otherUser?.avatar ? (
+        <img src={otherUser.avatar} alt={name} loading="lazy" className="w-11 h-11 rounded-full object-cover flex-shrink-0" />
       ) : (
         <div className="w-11 h-11 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold flex-shrink-0">
-          {conv.type === "group" ? "👥" : name?.charAt(0)?.toUpperCase()}
+          {isGroup ? "👥" : name?.charAt(0)?.toUpperCase()}
         </div>
       )}
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="font-semibold text-gray-800 truncate">
-          {conv.type === "group" ? conv.name : `@${name}`}
+          {isGroup ? conv.name : `@${name}`}
         </p>
         <p className="text-xs text-gray-400 truncate">
-          {conv.type === "group" ? `${conv.participants?.length} участников` : "Личный чат"}
+          {isGroup ? `${conv.participants?.length} участников` : "Личный чат"}
         </p>
       </div>
     </button>
   );
 };
 
-// ─── Main Messages page ────────────────────────────────────────────────────────
+// Modal: pick users (multi-select for group, single for add-to-chat)
+const UserPicker = ({ title, multi, onClose, onConfirm, excludeIds = [] }) => {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [picked, setPicked] = useState([]);
+  const [name, setName] = useState("");
+
+  useEffect(() => {
+    if (query.length < 1) { setResults([]); return; }
+    const t = setTimeout(async () => {
+      try {
+        const r = await userService.search(query);
+        setResults(r.filter((u) => !excludeIds.includes(u.uid)));
+      } catch {}
+    }, 250);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const toggle = (u) => {
+    if (multi) {
+      setPicked((p) => p.find((x) => x.uid === u.uid)
+        ? p.filter((x) => x.uid !== u.uid)
+        : [...p, u]);
+    } else {
+      onConfirm({ users: [u] });
+    }
+  };
+
+  const confirm = () => {
+    if (multi && picked.length === 0) return;
+    onConfirm({ users: picked, name: name.trim() });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="font-bold text-gray-800">{title}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+        </div>
+
+        {multi && (
+          <div className="p-3 border-b border-gray-100">
+            <input
+              type="text"
+              placeholder="Название группы"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 bg-gray-50"
+            />
+          </div>
+        )}
+
+        <div className="p-3 border-b border-gray-100">
+          <input
+            type="text"
+            placeholder="Найти пользователя..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 bg-gray-50"
+            autoFocus
+          />
+        </div>
+
+        {multi && picked.length > 0 && (
+          <div className="px-3 pt-2 flex flex-wrap gap-1.5">
+            {picked.map((u) => (
+              <span key={u.uid} className="bg-purple-100 text-purple-700 text-xs font-semibold px-2 py-1 rounded-full flex items-center gap-1">
+                @{u.username}
+                <button onClick={() => toggle(u)} className="hover:text-red-600">✕</button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto p-2">
+          {results.length === 0 ? (
+            <p className="text-center text-gray-400 text-sm p-4">
+              {query ? "Никого не найдено" : "Начни вводить никнейм"}
+            </p>
+          ) : (
+            results.map((u) => {
+              const isPicked = picked.find((p) => p.uid === u.uid);
+              return (
+                <button
+                  key={u.uid}
+                  onClick={() => toggle(u)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left transition-all ${
+                    isPicked ? "bg-purple-100" : "hover:bg-purple-50"
+                  }`}
+                >
+                  {u.avatar ? (
+                    <img src={u.avatar} alt="" loading="lazy" className="w-9 h-9 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-purple-200 flex items-center justify-center text-purple-700 text-xs font-bold">
+                      {u.username?.charAt(0)?.toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-gray-800">@{u.username}</p>
+                  </div>
+                  {multi && isPicked && <span className="text-purple-600 font-bold">✓</span>}
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        {multi && (
+          <div className="p-3 border-t border-gray-100">
+            <button
+              onClick={confirm}
+              disabled={picked.length === 0}
+              className="w-full py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl disabled:opacity-50 transition-all"
+            >
+              Создать группу ({picked.length})
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export default function Messages() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -101,6 +217,8 @@ export default function Messages() {
   const [searchResults, setSearchResults] = useState([]);
   const [showSearch, setShowSearch] = useState(false);
   const [sending, setSending] = useState(false);
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const bottomRef = useRef();
   const pollRef = useRef();
 
@@ -153,15 +271,40 @@ export default function Messages() {
   const startConversation = async (uid) => {
     try {
       const data = await messageService.createConversation(uid);
-      await loadConversations();
       setSearchTerm("");
       setShowSearch(false);
       setSearchResults([]);
-      // select the new conversation
       const convs = await loadConversations();
       const found = convs.find((c) => c.id === data.id);
       if (found) setSelectedConv(found);
     } catch (err) { console.error(err); }
+  };
+
+  const handleCreateGroup = async ({ users, name }) => {
+    try {
+      const finalName = name || `Группа ${users.map((u) => "@" + u.username).join(", ").slice(0, 40)}`;
+      const data = await messageService.createGroup(users.map((u) => u.uid), finalName);
+      setShowGroupModal(false);
+      const convs = await loadConversations();
+      const found = convs.find((c) => c.id === data.id);
+      if (found) setSelectedConv(found);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleAddParticipant = async ({ users }) => {
+    if (!selectedConv || users.length === 0) return;
+    try {
+      const u = users[0];
+      const result = await messageService.addParticipant(selectedConv.id, u.uid);
+      setShowAddModal(false);
+      const convs = await loadConversations();
+      const found = convs.find((c) => c.id === selectedConv.id);
+      if (found) setSelectedConv(found);
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
   const sendMessage = async (e) => {
@@ -185,11 +328,20 @@ export default function Messages() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-4 pb-8 h-[calc(100vh-4rem)] flex gap-4">
+    <div className="max-w-5xl mx-auto px-2 sm:px-4 py-4 pb-8 h-[calc(100vh-8rem)] flex gap-3">
       {/* Sidebar */}
-      <div className="w-72 flex-shrink-0 bg-white/90 backdrop-blur rounded-2xl shadow-md flex flex-col overflow-hidden">
+      <div className={`${selectedConv ? "hidden sm:flex" : "flex"} w-full sm:w-72 flex-shrink-0 bg-white/90 backdrop-blur rounded-2xl shadow-md flex-col overflow-hidden`}>
         <div className="p-4 border-b border-gray-100">
-          <h2 className="font-bold text-gray-800 text-lg mb-3">Сообщения</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-bold text-gray-800 text-lg">Сообщения</h2>
+            <button
+              onClick={() => setShowGroupModal(true)}
+              title="Создать группу"
+              className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-white flex items-center justify-center hover:shadow-lg transition-all"
+            >
+              <UsersIcon className="w-5 h-5" />
+            </button>
+          </div>
           <div className="relative">
             <input
               type="text"
@@ -216,9 +368,7 @@ export default function Messages() {
                           {u.username?.charAt(0)?.toUpperCase()}
                         </div>
                       )}
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800">@{u.username}</p>
-                      </div>
+                      <p className="text-sm font-semibold text-gray-800">@{u.username}</p>
                     </button>
                   ))
                 )}
@@ -229,7 +379,7 @@ export default function Messages() {
 
         <div className="flex-1 overflow-y-auto p-2">
           {conversations.length === 0 ? (
-            <p className="text-center text-gray-400 text-sm p-4">Нет чатов. Найди пользователя выше!</p>
+            <p className="text-center text-gray-400 text-sm p-4">Нет чатов. Найди пользователя или создай группу!</p>
           ) : (
             conversations.map((conv) => (
               <ConversationItem
@@ -245,17 +395,31 @@ export default function Messages() {
       </div>
 
       {/* Chat area */}
-      <div className="flex-1 bg-white/90 backdrop-blur rounded-2xl shadow-md flex flex-col overflow-hidden min-w-0">
+      <div className={`${selectedConv ? "flex" : "hidden sm:flex"} flex-1 bg-white/90 backdrop-blur rounded-2xl shadow-md flex-col overflow-hidden min-w-0`}>
         {selectedConv ? (
           <>
-            {/* Chat header */}
-            <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-purple-500 to-pink-500">
-              <p className="font-bold text-white text-lg">
+            <div className="p-3 border-b border-gray-100 bg-gradient-to-r from-purple-500 to-pink-500 flex items-center gap-2">
+              <button
+                onClick={() => setSelectedConv(null)}
+                className="sm:hidden text-white text-xl px-2"
+              >
+                ←
+              </button>
+              <p className="font-bold text-white flex-1 truncate">
                 {selectedConv.type === "group" ? `👥 ${selectedConv.name}` : "💬 Личный чат"}
+                <span className="text-white/70 text-xs font-normal ml-2">
+                  {selectedConv.participants?.length} уч.
+                </span>
               </p>
+              <button
+                onClick={() => setShowAddModal(true)}
+                title="Добавить участника"
+                className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-all"
+              >
+                <UserPlusIcon className="w-5 h-5" />
+              </button>
             </div>
 
-            {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4">
               {messages.length === 0 ? (
                 <div className="text-center py-12 text-gray-400">
@@ -275,7 +439,6 @@ export default function Messages() {
               <div ref={bottomRef} />
             </div>
 
-            {/* Input */}
             <div className="p-3 border-t border-gray-100">
               {attachment && (
                 <div className="flex items-center gap-2 bg-purple-50 rounded-xl px-3 py-2 mb-2 text-sm">
@@ -286,12 +449,8 @@ export default function Messages() {
               <form onSubmit={sendMessage} className="flex items-center gap-2">
                 <label className="cursor-pointer text-gray-400 hover:text-purple-500 flex-shrink-0">
                   <PaperClipIcon className="w-5 h-5" />
-                  <input
-                    type="file"
-                    accept="image/*,video/*"
-                    className="hidden"
-                    onChange={(e) => setAttachment(e.target.files[0])}
-                  />
+                  <input type="file" accept="image/*,video/*" className="hidden"
+                    onChange={(e) => setAttachment(e.target.files[0])} />
                 </label>
                 <input
                   type="text"
@@ -299,7 +458,6 @@ export default function Messages() {
                   className="flex-1 border border-gray-200 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 bg-gray-50"
                   value={newMsg}
                   onChange={(e) => setNewMsg(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(e); } }}
                 />
                 <button
                   type="submit"
@@ -315,11 +473,30 @@ export default function Messages() {
           <div className="flex-1 flex items-center justify-center text-center text-gray-400">
             <div>
               <div className="text-6xl mb-3">💬</div>
-              <p className="font-semibold text-gray-500">Выбери чат или найди пользователя</p>
+              <p className="font-semibold text-gray-500">Выбери чат, найди пользователя или создай группу</p>
             </div>
           </div>
         )}
       </div>
+
+      {showGroupModal && (
+        <UserPicker
+          title="Новая группа"
+          multi
+          onClose={() => setShowGroupModal(false)}
+          onConfirm={handleCreateGroup}
+          excludeIds={[user?.uid]}
+        />
+      )}
+      {showAddModal && selectedConv && (
+        <UserPicker
+          title="Добавить участника"
+          multi={false}
+          onClose={() => setShowAddModal(false)}
+          onConfirm={handleAddParticipant}
+          excludeIds={selectedConv.participants || []}
+        />
+      )}
     </div>
   );
 }

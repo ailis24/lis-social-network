@@ -514,17 +514,30 @@ app.get("/api/messages/conversations", authenticateToken, (req, res) => {
 
 app.post("/api/messages/conversation", authenticateToken, (req, res) => {
   try {
-    const { participantId, name } = req.body;
+    const { participantId, participantIds, name } = req.body;
 
-    const participants = [req.user.uid, participantId].sort();
+    // Build participant list (supports single or multiple)
+    let parts = [req.user.uid];
+    if (Array.isArray(participantIds)) {
+      parts = parts.concat(participantIds);
+    } else if (participantId) {
+      parts.push(participantId);
+    }
+    parts = [...new Set(parts)].sort();
+
+    if (parts.length < 2) {
+      return res.status(400).json({ error: "Нужен хотя бы один участник" });
+    }
+
+    const isGroup = !!name || parts.length > 2;
 
     // Check if personal conversation already exists
-    if (!name) {
+    if (!isGroup) {
       const existing = db
         .prepare(
           "SELECT id FROM conversations WHERE type = 'personal' AND participants = ?"
         )
-        .get(JSON.stringify(participants));
+        .get(JSON.stringify(parts));
 
       if (existing) {
         return res.json({ success: true, id: existing.id });
@@ -536,13 +549,49 @@ app.post("/api/messages/conversation", authenticateToken, (req, res) => {
         "INSERT INTO conversations (type, participants, name) VALUES (?, ?, ?)"
       )
       .run(
-        name ? "group" : "personal",
-        JSON.stringify(participants),
+        isGroup ? "group" : "personal",
+        JSON.stringify(parts),
         name || ""
       );
 
     res.json({ success: true, id: result.lastInsertRowid });
   } catch (error) {
+    console.error("Conversation error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Add participant to conversation; auto-converts personal -> group
+app.post("/api/messages/conversation/:id/participants", authenticateToken, (req, res) => {
+  try {
+    const { uid, name } = req.body;
+    const conv = db.prepare("SELECT * FROM conversations WHERE id = ?").get(req.params.id);
+    if (!conv) return res.status(404).json({ error: "Чат не найден" });
+
+    const parts = JSON.parse(conv.participants);
+    if (!parts.includes(req.user.uid)) {
+      return res.status(403).json({ error: "Нет доступа" });
+    }
+    if (parts.includes(uid)) {
+      return res.status(400).json({ error: "Уже в чате" });
+    }
+
+    const newParts = [...new Set([...parts, uid])].sort();
+    const newType = newParts.length > 2 ? "group" : conv.type;
+
+    // Auto-name group if converting and no name yet
+    let newName = conv.name;
+    if (newType === "group" && !newName) {
+      newName = name || "Новая группа";
+    }
+
+    db.prepare(
+      "UPDATE conversations SET participants = ?, type = ?, name = ? WHERE id = ?"
+    ).run(JSON.stringify(newParts), newType, newName, req.params.id);
+
+    res.json({ success: true, type: newType, participants: newParts, name: newName });
+  } catch (error) {
+    console.error("Add participant error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });

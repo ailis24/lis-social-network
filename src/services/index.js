@@ -158,6 +158,31 @@ export const messageService = {
     return await res.json();
   },
 
+  createGroup: async (participantIds, name) => {
+    const res = await fetch(`${API_URL}/api/messages/conversation`, {
+      method: "POST",
+      headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+      body: JSON.stringify({ participantIds, name }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Group creation failed");
+    return data;
+  },
+
+  addParticipant: async (conversationId, uid, name) => {
+    const res = await fetch(
+      `${API_URL}/api/messages/conversation/${conversationId}/participants`,
+      {
+        method: "POST",
+        headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+        body: JSON.stringify({ uid, name }),
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Add participant failed");
+    return data;
+  },
+
   getMessages: async (conversationId) => {
     const res = await fetch(`${API_URL}/api/messages/${conversationId}`, {
       headers: getAuthHeader(),
