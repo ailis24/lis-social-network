@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function Login() {
-  const [username, setUsername] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -15,10 +15,10 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      await login(username, password);
+      await login(phone, password);
       navigate("/");
     } catch (err) {
-      setError(err.message || "Неверный логин или пароль");
+      setError(err.message || "Неверный номер или пароль");
     } finally {
       setLoading(false);
     }
@@ -43,13 +43,13 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <input
-              type="text"
+              type="tel"
               required
-              autoComplete="username"
-              placeholder="Никнейм"
+              autoComplete="tel"
+              placeholder="Номер телефона"
               className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-400 bg-gray-50 text-gray-800"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
             />
             <input
               type="password"

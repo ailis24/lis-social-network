@@ -4,8 +4,8 @@ import { useAuth } from "../context/AuthContext";
 
 export default function Register() {
   const [username, setUsername] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
@@ -15,10 +15,6 @@ export default function Register() {
     e.preventDefault();
     setError("");
 
-    if (password !== confirm) {
-      setError("Пароли не совпадают");
-      return;
-    }
     if (password.length < 6) {
       setError("Пароль должен содержать минимум 6 символов");
       return;
@@ -26,7 +22,7 @@ export default function Register() {
 
     setLoading(true);
     try {
-      await register(username, password);
+      await register(username, phone, password);
       navigate("/");
     } catch (err) {
       setError(err.message || "Ошибка регистрации");
@@ -63,6 +59,15 @@ export default function Register() {
               onChange={(e) => setUsername(e.target.value)}
             />
             <input
+              type="tel"
+              required
+              autoComplete="tel"
+              placeholder="Номер телефона"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-400 bg-gray-50 text-gray-800"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+            <input
               type="password"
               required
               autoComplete="new-password"
@@ -70,15 +75,6 @@ export default function Register() {
               className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-400 bg-gray-50 text-gray-800"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-            />
-            <input
-              type="password"
-              required
-              autoComplete="new-password"
-              placeholder="Повторите пароль"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-400 bg-gray-50 text-gray-800"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
             />
             <button
               type="submit"

@@ -27,6 +27,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     uid TEXT PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
+    phone TEXT UNIQUE,
     password_hash TEXT NOT NULL,
     avatar TEXT DEFAULT '',
     bio TEXT DEFAULT '',
@@ -112,6 +113,17 @@ db.exec(`
   );
 `);
 
+// Migration: add phone column if missing
+try {
+  const cols = db.prepare("PRAGMA table_info(users)").all();
+  if (!cols.some((c) => c.name === "phone")) {
+    db.exec("ALTER TABLE users ADD COLUMN phone TEXT");
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL");
+  }
+} catch (e) {
+  console.error("Migration error:", e);
+}
+
 console.log("✅ SQLite database ready");
 console.log("========================================");
 console.log(`🚀 Lis API server will run on port ${PORT}`);
@@ -154,46 +166,62 @@ app.get("/api/health", (req, res) => {
 });
 
 // ============ AUTH ROUTES ============
+const normalizePhone = (phone) => String(phone || "").replace(/[^\d+]/g, "");
+
 app.post("/api/auth/register", async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, phone, password } = req.body;
+    const normPhone = normalizePhone(phone);
 
-    if (!username || !password) {
-      return res.status(400).json({ error: "Username and password required" });
+    if (!username || !normPhone || !password) {
+      return res.status(400).json({ error: "Никнейм, телефон и пароль обязательны" });
+    }
+    if (normPhone.length < 6) {
+      return res.status(400).json({ error: "Некорректный номер телефона" });
     }
 
-    const existing = db.prepare("SELECT uid FROM users WHERE username = ?").get(username);
-    if (existing) {
-      return res.status(400).json({ error: "Username already exists" });
+    const existingName = db.prepare("SELECT uid FROM users WHERE username = ?").get(username);
+    if (existingName) {
+      return res.status(400).json({ error: "Никнейм уже занят" });
+    }
+
+    const existingPhone = db.prepare("SELECT uid FROM users WHERE phone = ?").get(normPhone);
+    if (existingPhone) {
+      return res.status(400).json({ error: "Этот номер уже зарегистрирован" });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
     const uid = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     db.prepare(
-      "INSERT INTO users (uid, username, password_hash, avatar, bio) VALUES (?, ?, ?, '', '')"
-    ).run(uid, username, passwordHash);
+      "INSERT INTO users (uid, username, phone, password_hash, avatar, bio) VALUES (?, ?, ?, ?, '', '')"
+    ).run(uid, username, normPhone, passwordHash);
 
     const token = jwt.sign({ uid, username }, JWT_SECRET, { expiresIn: "7d" });
-    res.json({ token, user: { uid, username, avatar: "", bio: "" } });
+    res.json({ token, user: { uid, username, phone: normPhone, avatar: "", bio: "" } });
   } catch (error) {
     console.error("Register error:", error);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Ошибка сервера" });
   }
 });
 
 app.post("/api/auth/login", async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { phone, password } = req.body;
+    const normPhone = normalizePhone(phone);
 
-    const user = db.prepare("SELECT * FROM users WHERE username = ?").get(username);
+    if (!normPhone || !password) {
+      return res.status(400).json({ error: "Введите телефон и пароль" });
+    }
+
+    const user = db.prepare("SELECT * FROM users WHERE phone = ?").get(normPhone);
     if (!user) {
-      return res.status(400).json({ error: "User not found" });
+      return res.status(400).json({ error: "Пользователь не найден" });
     }
 
     const validPassword = await bcrypt.compare(password, user.password_hash);
     if (!validPassword) {
-      return res.status(400).json({ error: "Invalid password" });
+      return res.status(400).json({ error: "Неверный пароль" });
     }
 
     const token = jwt.sign({ uid: user.uid, username: user.username }, JWT_SECRET, {
@@ -205,13 +233,14 @@ app.post("/api/auth/login", async (req, res) => {
       user: {
         uid: user.uid,
         username: user.username,
+        phone: user.phone,
         avatar: user.avatar,
         bio: user.bio,
       },
     });
   } catch (error) {
     console.error("Login error:", error);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Ошибка сервера" });
   }
 });
 

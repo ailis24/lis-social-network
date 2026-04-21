@@ -6,11 +6,11 @@ const getAuthHeader = () => {
 };
 
 export const authService = {
-  register: async (username, password) => {
+  register: async (username, phone, password) => {
     const res = await fetch(`${API_URL}/api/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, phone, password }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
@@ -19,11 +19,11 @@ export const authService = {
     return data.user;
   },
 
-  login: async (username, password) => {
+  login: async (phone, password) => {
     const res = await fetch(`${API_URL}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ phone, password }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);

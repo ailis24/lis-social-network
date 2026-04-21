@@ -15,14 +15,14 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  const login = async (username, password) => {
-    const userData = await authService.login(username, password);
+  const login = async (phone, password) => {
+    const userData = await authService.login(phone, password);
     setUser(userData);
     return userData;
   };
 
-  const register = async (username, password) => {
-    const userData = await authService.register(username, password);
+  const register = async (username, phone, password) => {
+    const userData = await authService.register(username, phone, password);
     setUser(userData);
     return userData;
   };
