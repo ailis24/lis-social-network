@@ -365,6 +365,16 @@ const CreatePost = ({ currentUser, onCreated }) => {
   const [image, setImage] = useState(null);
   const [video, setVideo] = useState(null);
   const [loading, setLoading] = useState(false);
+  const textareaRef = useRef(null);
+
+  useEffect(() => {
+    const handler = () => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      setTimeout(() => textareaRef.current?.focus(), 300);
+    };
+    window.addEventListener("lis:create-post", handler);
+    return () => window.removeEventListener("lis:create-post", handler);
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -395,6 +405,7 @@ const CreatePost = ({ currentUser, onCreated }) => {
         )}
         <form onSubmit={submit} className="flex-1">
           <textarea
+            ref={textareaRef}
             className="w-full border border-gray-200 rounded-xl p-3 resize-none text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-gray-50"
             rows={3}
             placeholder="Что у тебя нового?"

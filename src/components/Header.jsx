@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { notificationService } from "../services";
 
 export default function Header() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [unread, setUnread] = useState(0);
@@ -26,7 +26,6 @@ export default function Header() {
     return () => clearInterval(iv);
   }, [user]);
 
-  // Close notifs on outside click
   useEffect(() => {
     const handler = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) {
@@ -37,7 +36,7 @@ export default function Header() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const handleBellClick = async () => {
+  const openNotifs = async () => {
     setShowNotifs((v) => !v);
     if (unread > 0) {
       try {
@@ -47,55 +46,92 @@ export default function Header() {
     }
   };
 
+  const handleCreate = () => {
+    navigate("/");
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("lis:create-post"));
+    }, 50);
+  };
+
   const isActive = (path) => location.pathname === path;
 
+  const NavBtn = ({ to, icon, label, active, onClick }) => {
+    const cls = `flex flex-col items-center justify-center gap-0.5 w-14 h-14 transition-all ${
+      active ? "text-purple-600" : "text-gray-500"
+    }`;
+    if (onClick) {
+      return (
+        <button onClick={onClick} className={cls}>
+          <span className="text-2xl leading-none">{icon}</span>
+          <span className="text-[10px] font-medium">{label}</span>
+        </button>
+      );
+    }
+    return (
+      <Link to={to} className={cls}>
+        <span className="text-2xl leading-none">{icon}</span>
+        <span className="text-[10px] font-medium">{label}</span>
+      </Link>
+    );
+  };
+
   return (
-    <header className="sticky top-0 z-30 bg-gradient-to-r from-purple-700 to-pink-600 shadow-lg">
-      <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-        {/* Logo */}
-        <Link to="/" className="lis-logo text-3xl select-none">Lis</Link>
-
-        {/* Nav */}
-        <nav className="hidden sm:flex items-center gap-1">
-          {[
-            { to: "/", label: "🏠", title: "Лента" },
-            { to: "/search", label: "🔍", title: "Поиск" },
-            { to: `/profile/${user?.uid}`, label: "👤", title: "Профиль" },
-            { to: "/messages", label: "💬", title: "Сообщения" },
-          ].map(({ to, label, title }) => (
-            <Link
-              key={to}
-              to={to}
-              title={title}
-              className={`px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
-                isActive(to)
-                  ? "bg-white/30 text-white"
-                  : "text-white/80 hover:bg-white/20 hover:text-white"
-              }`}
-            >
-              {label} <span className="hidden md:inline">{title}</span>
-            </Link>
-          ))}
-        </nav>
-
-        {/* Right side */}
-        <div className="flex items-center gap-2">
-          {/* Bell */}
-          <div className="relative" ref={notifRef}>
-            <button
-              onClick={handleBellClick}
-              className="relative p-2 rounded-full hover:bg-white/20 transition-all text-white"
-            >
-              🔔
-              {unread > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-bold px-1">
-                  {unread > 9 ? "9+" : unread}
-                </span>
+    <>
+      {/* Top header — centered Lis logo */}
+      <header className="sticky top-0 z-30 bg-gradient-to-r from-purple-700 to-pink-600 shadow-lg">
+        <div className="max-w-5xl mx-auto px-4 py-2 grid grid-cols-3 items-center">
+          <div /> {/* spacer */}
+          <Link to="/" className="lis-logo text-2xl text-white text-center select-none">
+            Lis
+          </Link>
+          <div className="flex justify-end">
+            <Link to={`/profile/${user?.uid}`} className="flex items-center">
+              {user?.avatar ? (
+                <img
+                  src={user.avatar}
+                  alt={user.username}
+                  loading="lazy"
+                  className="w-8 h-8 rounded-full object-cover border-2 border-white/50"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-white/30 flex items-center justify-center text-white font-bold text-sm">
+                  {user?.username?.charAt(0)?.toUpperCase()}
+                </div>
               )}
-            </button>
+            </Link>
+          </div>
+        </div>
+      </header>
 
+      {/* Bottom nav — always visible, 5 items, parallel & aligned */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur border-t border-gray-200">
+        <div className="max-w-5xl mx-auto relative flex items-end justify-around px-2 pt-1 pb-1">
+          <NavBtn to="/" icon="🏠" label="Главная" active={isActive("/")} />
+          <NavBtn to="/search" icon="🔍" label="Поиск" active={isActive("/search")} />
+
+          {/* Center + button (raised) */}
+          <button
+            onClick={handleCreate}
+            className="-mt-6 w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-white text-3xl font-bold shadow-xl flex items-center justify-center active:scale-95 transition-all"
+            title="Новый пост"
+          >
+            +
+          </button>
+
+          <div ref={notifRef} className="relative">
+            <NavBtn
+              icon="🔔"
+              label="Уведомления"
+              active={showNotifs}
+              onClick={openNotifs}
+            />
+            {unread > 0 && (
+              <span className="absolute top-1 right-2 bg-red-500 text-white text-[10px] rounded-full min-w-[16px] h-[16px] flex items-center justify-center font-bold px-1">
+                {unread > 9 ? "9+" : unread}
+              </span>
+            )}
             {showNotifs && (
-              <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
+              <div className="absolute right-0 bottom-full mb-2 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
                 <div className="p-3 border-b border-gray-100">
                   <p className="font-bold text-gray-800">Уведомления</p>
                 </div>
@@ -130,46 +166,17 @@ export default function Header() {
             )}
           </div>
 
-          {/* Avatar */}
-          <Link to={`/profile/${user?.uid}`} className="flex items-center gap-2">
-            {user?.avatar ? (
-              <img
-                src={user.avatar}
-                alt={user.username}
-                loading="lazy"
-                className="w-8 h-8 rounded-full object-cover border-2 border-white/50"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-white/30 flex items-center justify-center text-white font-bold text-sm">
-                {user?.username?.charAt(0)?.toUpperCase()}
-              </div>
-            )}
-            <span className="hidden md:block text-sm text-white font-semibold">
-              @{user?.username}
-            </span>
-          </Link>
+          <NavBtn
+            to={`/profile/${user?.uid}`}
+            icon="👤"
+            label="Профиль"
+            active={location.pathname.startsWith("/profile")}
+          />
         </div>
       </div>
 
-      {/* Mobile bottom nav */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-gray-200 flex justify-around py-2 z-30">
-        {[
-          { to: "/", label: "🏠" },
-          { to: "/search", label: "🔍" },
-          { to: `/profile/${user?.uid}`, label: "👤" },
-          { to: "/messages", label: "💬" },
-        ].map(({ to, label }) => (
-          <Link
-            key={to}
-            to={to}
-            className={`p-2 rounded-xl text-xl transition-all ${
-              isActive(to) ? "bg-purple-100" : "opacity-60"
-            }`}
-          >
-            {label}
-          </Link>
-        ))}
-      </div>
-    </header>
+      {/* Spacer so content isn't hidden under bottom nav */}
+      <div className="h-16" />
+    </>
   );
 }
