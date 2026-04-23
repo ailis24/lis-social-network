@@ -44,6 +44,12 @@ export const authService = {
 };
 
 export const userService = {
+  getCount: async () => {
+    const res = await fetch(`${API_URL}/api/users/count`);
+    if (!res.ok) throw new Error("Count failed");
+    return await res.json();
+  },
+
   search: async (query) => {
     const res = await fetch(
       `${API_URL}/api/users/search?q=${encodeURIComponent(query)}`,
@@ -95,11 +101,12 @@ export const postService = {
     return await res.json();
   },
 
-  createPost: async (content, image, video, pollData) => {
+  createPost: async (content, image, video, pollData, file) => {
     const formData = new FormData();
     if (content) formData.append("content", content);
     if (image) formData.append("image", image);
     if (video) formData.append("video", video);
+    if (file) formData.append("file", file);
     if (pollData) formData.append("pollData", JSON.stringify(pollData));
 
     const res = await fetch(`${API_URL}/api/posts`, {
@@ -111,6 +118,26 @@ export const postService = {
     return await res.json();
   },
 
+  deletePost: async (postId) => {
+    const res = await fetch(`${API_URL}/api/posts/${postId}`, {
+      method: "DELETE",
+      headers: getAuthHeader(),
+    });
+    if (!res.ok) throw new Error("Delete failed");
+    return await res.json();
+  },
+
+  votePoll: async (postId, optionIndex) => {
+    const res = await fetch(`${API_URL}/api/posts/${postId}/vote`, {
+      method: "POST",
+      headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+      body: JSON.stringify({ optionIndex }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Vote failed");
+    return data;
+  },
+
   toggleLike: async (postId) => {
     const res = await fetch(`${API_URL}/api/posts/${postId}/like`, {
       method: "POST",
@@ -120,11 +147,14 @@ export const postService = {
     return await res.json();
   },
 
-  addComment: async (postId, text) => {
+  addComment: async (postId, text, file) => {
+    const formData = new FormData();
+    if (text) formData.append("text", text);
+    if (file) formData.append("file", file);
     const res = await fetch(`${API_URL}/api/posts/${postId}/comment`, {
       method: "POST",
-      headers: { ...getAuthHeader(), "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      headers: getAuthHeader(),
+      body: formData,
     });
     if (!res.ok) throw new Error("Comment failed");
     return await res.json();
@@ -145,6 +175,15 @@ export const messageService = {
       headers: getAuthHeader(),
     });
     if (!res.ok) throw new Error("Failed to load conversations");
+    return await res.json();
+  },
+
+  deleteConversation: async (id) => {
+    const res = await fetch(`${API_URL}/api/messages/conversations/${id}`, {
+      method: "DELETE",
+      headers: getAuthHeader(),
+    });
+    if (!res.ok) throw new Error("Delete failed");
     return await res.json();
   },
 
@@ -176,7 +215,7 @@ export const messageService = {
         method: "POST",
         headers: { ...getAuthHeader(), "Content-Type": "application/json" },
         body: JSON.stringify({ uid, name }),
-      }
+      },
     );
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Add participant failed");
@@ -216,6 +255,14 @@ export const messageService = {
 };
 
 export const friendService = {
+  getStatus: async (friendId) => {
+    const res = await fetch(`${API_URL}/api/friends/status/${friendId}`, {
+      headers: getAuthHeader(),
+    });
+    if (!res.ok) throw new Error("Status failed");
+    return await res.json();
+  },
+
   sendRequest: async (friendId) => {
     const res = await fetch(`${API_URL}/api/friends/request`, {
       method: "POST",
@@ -305,5 +352,26 @@ export const timerService = {
     });
     if (!res.ok) throw new Error("Lock failed");
     return await res.json();
+  },
+};
+
+export const premiumService = {
+  getStatus: async () => {
+    const res = await fetch(`${API_URL}/api/premium/status`, {
+      headers: getAuthHeader(),
+    });
+    if (!res.ok) throw new Error("Premium status failed");
+    return await res.json();
+  },
+
+  activate: async (phone) => {
+    const res = await fetch(`${API_URL}/api/premium/activate`, {
+      method: "POST",
+      headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+      body: JSON.stringify({ phone }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Activation failed");
+    return data;
   },
 };

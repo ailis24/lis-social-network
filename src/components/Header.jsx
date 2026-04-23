@@ -81,7 +81,10 @@ export default function Header() {
       <header className="sticky top-0 z-30 bg-gradient-to-r from-purple-700 to-pink-600 shadow-lg">
         <div className="max-w-5xl mx-auto px-4 py-2 grid grid-cols-3 items-center">
           <div /> {/* spacer */}
-          <Link to="/" className="lis-logo text-2xl text-white text-center select-none">
+          <Link
+            to="/"
+            className="lis-logo text-2xl text-white text-center select-none"
+          >
             Lis
           </Link>
           <div className="flex justify-end items-center gap-2">
@@ -114,7 +117,12 @@ export default function Header() {
       <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur border-t border-gray-200">
         <div className="max-w-5xl mx-auto relative flex items-end justify-around px-2 pt-1 pb-1">
           <NavBtn to="/" icon="🏠" label="Главная" active={isActive("/")} />
-          <NavBtn to="/search" icon="🔍" label="Поиск" active={isActive("/search")} />
+          <NavBtn
+            to="/search"
+            icon="🔍"
+            label="Поиск"
+            active={isActive("/search")}
+          />
 
           {/* Center + button (raised) */}
           <button
@@ -144,7 +152,9 @@ export default function Header() {
                 </div>
                 <div className="max-h-72 overflow-y-auto">
                   {notifications.length === 0 ? (
-                    <p className="text-center text-gray-400 text-sm p-4">Нет уведомлений</p>
+                    <p className="text-center text-gray-400 text-sm p-4">
+                      Нет уведомлений
+                    </p>
                   ) : (
                     notifications.slice(0, 20).map((n) => (
                       <div
@@ -154,7 +164,11 @@ export default function Header() {
                         }`}
                       >
                         <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-sm flex-shrink-0">
-                          {n.type === "like" ? "❤️" : n.type === "comment" ? "💬" : "👤"}
+                          {n.type === "like"
+                            ? "❤️"
+                            : n.type === "comment"
+                              ? "💬"
+                              : "👤"}
                         </div>
                         <div>
                           <p className="text-sm text-gray-800">

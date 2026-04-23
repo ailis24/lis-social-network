@@ -12,18 +12,24 @@ export default function Search() {
   const [sentRequests, setSentRequests] = useState({});
   const [startingChat, setStartingChat] = useState({});
 
-  const search = useCallback(async (q) => {
-    if (!q.trim()) { setResults([]); return; }
-    setLoading(true);
-    try {
-      const data = await userService.search(q);
-      setResults(data.filter((u) => u.uid !== user?.uid));
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.uid]);
+  const search = useCallback(
+    async (q) => {
+      if (!q.trim()) {
+        setResults([]);
+        return;
+      }
+      setLoading(true);
+      try {
+        const data = await userService.search(q);
+        setResults(data.filter((u) => u.uid !== user?.uid));
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [user?.uid],
+  );
 
   useEffect(() => {
     const timer = setTimeout(() => search(query), 300);
@@ -59,7 +65,9 @@ export default function Search() {
 
       {/* Search input */}
       <div className="relative mb-6">
-        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg">🔍</span>
+        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg">
+          🔍
+        </span>
         <input
           type="text"
           value={query}
@@ -83,7 +91,10 @@ export default function Search() {
               className="bg-white/90 backdrop-blur rounded-2xl p-4 flex items-center gap-4 shadow-md"
             >
               {/* Avatar — clickable */}
-              <button onClick={() => navigate(`/profile/${u.uid}`)} className="flex-shrink-0">
+              <button
+                onClick={() => navigate(`/profile/${u.uid}`)}
+                className="flex-shrink-0"
+              >
                 {u.avatar ? (
                   <img
                     src={u.avatar}

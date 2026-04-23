@@ -111,14 +111,33 @@ db.exec(`
     is_locked INTEGER DEFAULT 0,
     lock_until TEXT DEFAULT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS subscriptions (
+    user_id TEXT PRIMARY KEY,
+    expires_at TEXT NOT NULL,
+    activated_at TEXT DEFAULT (datetime('now'))
+  );
 `);
+
+// Migration: add file_url to comments
+try {
+  const ccols = db.prepare("PRAGMA table_info(comments)").all();
+  if (!ccols.some((c) => c.name === "file_url")) {
+    db.exec("ALTER TABLE comments ADD COLUMN file_url TEXT DEFAULT ''");
+    db.exec("ALTER TABLE comments ADD COLUMN file_type TEXT DEFAULT ''");
+  }
+} catch (e) {
+  console.error("Comments migration error:", e);
+}
 
 // Migration: add phone column if missing
 try {
   const cols = db.prepare("PRAGMA table_info(users)").all();
   if (!cols.some((c) => c.name === "phone")) {
     db.exec("ALTER TABLE users ADD COLUMN phone TEXT");
-    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL");
+    db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL",
+    );
   }
 } catch (e) {
   console.error("Migration error:", e);
@@ -165,6 +184,29 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", storage: "SQLite" });
 });
 
+// Public: total registered users
+app.get("/api/users/count", (req, res) => {
+  try {
+    const row = db.prepare("SELECT COUNT(*) as count FROM users").get();
+    res.json({ count: row?.count || 0 });
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Helper: check if user has active premium
+const hasPremium = (uid) => {
+  try {
+    const sub = db
+      .prepare("SELECT expires_at FROM subscriptions WHERE user_id = ?")
+      .get(uid);
+    if (!sub) return false;
+    return new Date(sub.expires_at) > new Date();
+  } catch {
+    return false;
+  }
+};
+
 // ============ AUTH ROUTES ============
 const normalizePhone = (phone) => String(phone || "").replace(/[^\d+]/g, "");
 
@@ -174,18 +216,24 @@ app.post("/api/auth/register", async (req, res) => {
     const normPhone = normalizePhone(phone);
 
     if (!username || !normPhone || !password) {
-      return res.status(400).json({ error: "Никнейм, телефон и пароль обязательны" });
+      return res
+        .status(400)
+        .json({ error: "Никнейм, телефон и пароль обязательны" });
     }
     if (normPhone.length < 6) {
       return res.status(400).json({ error: "Некорректный номер телефона" });
     }
 
-    const existingName = db.prepare("SELECT uid FROM users WHERE username = ?").get(username);
+    const existingName = db
+      .prepare("SELECT uid FROM users WHERE username = ?")
+      .get(username);
     if (existingName) {
       return res.status(400).json({ error: "Никнейм уже занят" });
     }
 
-    const existingPhone = db.prepare("SELECT uid FROM users WHERE phone = ?").get(normPhone);
+    const existingPhone = db
+      .prepare("SELECT uid FROM users WHERE phone = ?")
+      .get(normPhone);
     if (existingPhone) {
       return res.status(400).json({ error: "Этот номер уже зарегистрирован" });
     }
@@ -194,11 +242,14 @@ app.post("/api/auth/register", async (req, res) => {
     const uid = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     db.prepare(
-      "INSERT INTO users (uid, username, phone, password_hash, avatar, bio) VALUES (?, ?, ?, ?, '', '')"
+      "INSERT INTO users (uid, username, phone, password_hash, avatar, bio) VALUES (?, ?, ?, ?, '', '')",
     ).run(uid, username, normPhone, passwordHash);
 
     const token = jwt.sign({ uid, username }, JWT_SECRET, { expiresIn: "7d" });
-    res.json({ token, user: { uid, username, phone: normPhone, avatar: "", bio: "" } });
+    res.json({
+      token,
+      user: { uid, username, phone: normPhone, avatar: "", bio: "" },
+    });
   } catch (error) {
     console.error("Register error:", error);
     res.status(500).json({ error: "Ошибка сервера" });
@@ -214,7 +265,9 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(400).json({ error: "Введите телефон и пароль" });
     }
 
-    const user = db.prepare("SELECT * FROM users WHERE phone = ?").get(normPhone);
+    const user = db
+      .prepare("SELECT * FROM users WHERE phone = ?")
+      .get(normPhone);
     if (!user) {
       return res.status(400).json({ error: "Пользователь не найден" });
     }
@@ -224,9 +277,13 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(400).json({ error: "Неверный пароль" });
     }
 
-    const token = jwt.sign({ uid: user.uid, username: user.username }, JWT_SECRET, {
-      expiresIn: "7d",
-    });
+    const token = jwt.sign(
+      { uid: user.uid, username: user.username },
+      JWT_SECRET,
+      {
+        expiresIn: "7d",
+      },
+    );
 
     res.json({
       token,
@@ -251,7 +308,9 @@ app.get("/api/users/search", authenticateToken, (req, res) => {
     if (!q) return res.json([]);
 
     const users = db
-      .prepare("SELECT uid, username, avatar, bio FROM users WHERE username LIKE ? LIMIT 20")
+      .prepare(
+        "SELECT uid, username, avatar, bio FROM users WHERE username LIKE ? LIMIT 20",
+      )
       .all(`%${q}%`);
 
     res.json(users);
@@ -262,7 +321,9 @@ app.get("/api/users/search", authenticateToken, (req, res) => {
 
 app.get("/api/users/:uid", authenticateToken, (req, res) => {
   try {
-    const user = db.prepare("SELECT * FROM users WHERE uid = ?").get(req.params.uid);
+    const user = db
+      .prepare("SELECT * FROM users WHERE uid = ?")
+      .get(req.params.uid);
 
     if (!user) {
       return res.status(404).json({ error: "User not found" });
@@ -270,7 +331,7 @@ app.get("/api/users/:uid", authenticateToken, (req, res) => {
 
     const friendsCount = db
       .prepare(
-        "SELECT COUNT(*) as count FROM friendships WHERE (user_id = ? OR friend_id = ?) AND status = 'accepted'"
+        "SELECT COUNT(*) as count FROM friendships WHERE (user_id = ? OR friend_id = ?) AND status = 'accepted'",
       )
       .get(req.params.uid, req.params.uid);
 
@@ -302,11 +363,17 @@ app.put("/api/users/profile", authenticateToken, (req, res) => {
         return res.status(400).json({ error: "Username taken" });
       }
 
-      db.prepare("UPDATE users SET username = ? WHERE uid = ?").run(username, req.user.uid);
+      db.prepare("UPDATE users SET username = ? WHERE uid = ?").run(
+        username,
+        req.user.uid,
+      );
     }
 
     if (bio !== undefined) {
-      db.prepare("UPDATE users SET bio = ? WHERE uid = ?").run(bio, req.user.uid);
+      db.prepare("UPDATE users SET bio = ? WHERE uid = ?").run(
+        bio,
+        req.user.uid,
+      );
     }
 
     res.json({ success: true });
@@ -315,18 +382,26 @@ app.put("/api/users/profile", authenticateToken, (req, res) => {
   }
 });
 
-app.post("/api/users/avatar", authenticateToken, upload.single("avatar"), (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+app.post(
+  "/api/users/avatar",
+  authenticateToken,
+  upload.single("avatar"),
+  (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-    const avatarUrl = `/uploads/${req.file.filename}`;
-    db.prepare("UPDATE users SET avatar = ? WHERE uid = ?").run(avatarUrl, req.user.uid);
+      const avatarUrl = `/uploads/${req.file.filename}`;
+      db.prepare("UPDATE users SET avatar = ? WHERE uid = ?").run(
+        avatarUrl,
+        req.user.uid,
+      );
 
-    res.json({ avatar: avatarUrl });
-  } catch (error) {
-    res.status(500).json({ error: "Server error" });
-  }
-});
+      res.json({ avatar: avatarUrl });
+    } catch (error) {
+      res.status(500).json({ error: "Server error" });
+    }
+  },
+);
 
 // ============ POST ROUTES ============
 app.get("/api/posts", authenticateToken, (req, res) => {
@@ -336,7 +411,7 @@ app.get("/api/posts", authenticateToken, (req, res) => {
         `SELECT p.*, u.username, u.avatar as author_avatar 
          FROM posts p 
          JOIN users u ON p.author_id = u.uid 
-         ORDER BY p.created_at DESC LIMIT 50`
+         ORDER BY p.created_at DESC LIMIT 50`,
       )
       .all();
 
@@ -353,7 +428,7 @@ app.get("/api/posts", authenticateToken, (req, res) => {
         likes: JSON.parse(p.likes || "[]"),
         comments_count: p.comments_count || 0,
         created_at: p.created_at,
-      }))
+      })),
     );
   } catch (error) {
     res.status(500).json({ error: "Server error" });
@@ -366,6 +441,7 @@ app.post(
   upload.fields([
     { name: "image", maxCount: 1 },
     { name: "video", maxCount: 1 },
+    { name: "file", maxCount: 1 },
   ]),
   (req, res) => {
     try {
@@ -380,30 +456,89 @@ app.post(
       if (req.files?.video?.[0]) {
         videoUrl = `/uploads/${req.files.video[0].filename}`;
       }
+      // Generic file: route by mimetype
+      if (req.files?.file?.[0]) {
+        const f = req.files.file[0];
+        const url = `/uploads/${f.filename}`;
+        if (f.mimetype.startsWith("image/")) imageUrl = url;
+        else if (f.mimetype.startsWith("video/")) videoUrl = url;
+        else videoUrl = url; // fallback: store in video field as generic media link
+      }
+
+      // pollData may be JSON string from FormData
+      let pollJson = "";
+      if (pollData) {
+        try {
+          const parsed =
+            typeof pollData === "string" ? JSON.parse(pollData) : pollData;
+          pollJson = JSON.stringify(parsed);
+        } catch {
+          pollJson = "";
+        }
+      }
 
       const result = db
         .prepare(
           `INSERT INTO posts (author_id, content, image, video, poll_data, likes) 
-           VALUES (?, ?, ?, ?, ?, '[]')`
+           VALUES (?, ?, ?, ?, ?, '[]')`,
         )
-        .run(
-          req.user.uid,
-          content || "",
-          imageUrl,
-          videoUrl,
-          pollData ? JSON.stringify(pollData) : ""
-        );
+        .run(req.user.uid, content || "", imageUrl, videoUrl, pollJson);
 
       res.json({ success: true, id: result.lastInsertRowid });
     } catch (error) {
+      console.error("Create post error:", error);
       res.status(500).json({ error: "Server error" });
     }
-  }
+  },
 );
+
+// Poll voting
+app.post("/api/posts/:id/vote", authenticateToken, (req, res) => {
+  try {
+    const { optionIndex } = req.body;
+    const post = db
+      .prepare("SELECT poll_data FROM posts WHERE id = ?")
+      .get(req.params.id);
+    if (!post || !post.poll_data) {
+      return res.status(404).json({ error: "Опрос не найден" });
+    }
+    const poll = JSON.parse(post.poll_data);
+    if (
+      !poll.options ||
+      optionIndex < 0 ||
+      optionIndex >= poll.options.length
+    ) {
+      return res.status(400).json({ error: "Некорректный вариант" });
+    }
+    poll.voters = poll.voters || {};
+    if (poll.voters[req.user.uid] !== undefined) {
+      return res.status(400).json({ error: "Вы уже голосовали" });
+    }
+    // option may be string or {text, votes}
+    if (typeof poll.options[optionIndex] === "string") {
+      poll.options = poll.options.map((o) =>
+        typeof o === "string" ? { text: o, votes: 0 } : o,
+      );
+    }
+    poll.options[optionIndex].votes =
+      (poll.options[optionIndex].votes || 0) + 1;
+    poll.voters[req.user.uid] = optionIndex;
+    db.prepare("UPDATE posts SET poll_data = ? WHERE id = ?").run(
+      JSON.stringify(poll),
+      req.params.id,
+    );
+    res.json({ poll });
+  } catch (error) {
+    console.error("Vote error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 app.post("/api/posts/:id/like", authenticateToken, (req, res) => {
   try {
-    const post = db.prepare("SELECT likes FROM posts WHERE id = ?").get(req.params.id);
+    const post = db
+      .prepare("SELECT likes FROM posts WHERE id = ?")
+      .get(req.params.id);
 
     if (!post) {
       return res.status(404).json({ error: "Post not found" });
@@ -418,7 +553,10 @@ app.post("/api/posts/:id/like", authenticateToken, (req, res) => {
       likes.splice(userIndex, 1);
     }
 
-    db.prepare("UPDATE posts SET likes = ? WHERE id = ?").run(JSON.stringify(likes), req.params.id);
+    db.prepare("UPDATE posts SET likes = ? WHERE id = ?").run(
+      JSON.stringify(likes),
+      req.params.id,
+    );
 
     res.json({ likes });
   } catch (error) {
@@ -426,31 +564,52 @@ app.post("/api/posts/:id/like", authenticateToken, (req, res) => {
   }
 });
 
-app.post("/api/posts/:id/comment", authenticateToken, (req, res) => {
-  try {
-    const { text } = req.body;
+app.post(
+  "/api/posts/:id/comment",
+  authenticateToken,
+  upload.single("file"),
+  (req, res) => {
+    try {
+      const { text } = req.body;
+      let fileUrl = "";
+      let fileType = "";
+      if (req.file) {
+        fileUrl = `/uploads/${req.file.filename}`;
+        if (req.file.mimetype.startsWith("image/")) fileType = "image";
+        else if (req.file.mimetype.startsWith("video/")) fileType = "video";
+        else fileType = "file";
+      }
 
-    const result = db
-      .prepare("INSERT INTO comments (post_id, author_id, text) VALUES (?, ?, ?)")
-      .run(req.params.id, req.user.uid, text);
+      if (!text && !fileUrl) {
+        return res.status(400).json({ error: "Пустой комментарий" });
+      }
 
-    db.prepare("UPDATE posts SET comments_count = comments_count + 1 WHERE id = ?").run(
-      req.params.id
-    );
+      const result = db
+        .prepare(
+          "INSERT INTO comments (post_id, author_id, text, file_url, file_type) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run(req.params.id, req.user.uid, text || "", fileUrl, fileType);
 
-    // Create notification
-    const post = db.prepare("SELECT author_id FROM posts WHERE id = ?").get(req.params.id);
-    if (post && post.author_id !== req.user.uid) {
       db.prepare(
-        "INSERT INTO notifications (recipient_id, sender_id, type, message) VALUES (?, ?, 'comment', ?)"
-      ).run(post.author_id, req.user.uid, `commented on your post`);
-    }
+        "UPDATE posts SET comments_count = comments_count + 1 WHERE id = ?",
+      ).run(req.params.id);
 
-    res.json({ success: true, id: result.lastInsertRowid });
-  } catch (error) {
-    res.status(500).json({ error: "Server error" });
-  }
-});
+      const post = db
+        .prepare("SELECT author_id FROM posts WHERE id = ?")
+        .get(req.params.id);
+      if (post && post.author_id !== req.user.uid) {
+        db.prepare(
+          "INSERT INTO notifications (recipient_id, sender_id, type, message) VALUES (?, ?, 'comment', ?)",
+        ).run(post.author_id, req.user.uid, `commented on your post`);
+      }
+
+      res.json({ success: true, id: result.lastInsertRowid });
+    } catch (error) {
+      console.error("Comment error:", error);
+      res.status(500).json({ error: "Server error" });
+    }
+  },
+);
 
 app.get("/api/posts/:id/comments", authenticateToken, (req, res) => {
   try {
@@ -460,7 +619,7 @@ app.get("/api/posts/:id/comments", authenticateToken, (req, res) => {
          FROM comments c 
          JOIN users u ON c.author_id = u.uid 
          WHERE c.post_id = ? 
-         ORDER BY c.created_at ASC`
+         ORDER BY c.created_at ASC`,
       )
       .all(req.params.id);
 
@@ -472,7 +631,9 @@ app.get("/api/posts/:id/comments", authenticateToken, (req, res) => {
 
 app.delete("/api/posts/:id", authenticateToken, (req, res) => {
   try {
-    const post = db.prepare("SELECT author_id FROM posts WHERE id = ?").get(req.params.id);
+    const post = db
+      .prepare("SELECT author_id FROM posts WHERE id = ?")
+      .get(req.params.id);
 
     if (!post) return res.status(404).json({ error: "Post not found" });
     if (post.author_id !== req.user.uid)
@@ -494,7 +655,7 @@ app.get("/api/messages/conversations", authenticateToken, (req, res) => {
       .prepare(
         `SELECT * FROM conversations 
          WHERE participants LIKE ? 
-         ORDER BY created_at DESC`
+         ORDER BY created_at DESC`,
       )
       .all(`%${req.user.uid}%`);
 
@@ -505,9 +666,39 @@ app.get("/api/messages/conversations", authenticateToken, (req, res) => {
         participants: JSON.parse(c.participants),
         name: c.name,
         created_at: c.created_at,
-      }))
+      })),
     );
   } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Delete conversation for the current user (removes from participants;
+// when no participants remain, the conversation and its messages are purged).
+app.delete("/api/messages/conversations/:id", authenticateToken, (req, res) => {
+  try {
+    const conv = db
+      .prepare("SELECT * FROM conversations WHERE id = ?")
+      .get(req.params.id);
+    if (!conv) return res.status(404).json({ error: "Чат не найден" });
+
+    const parts = JSON.parse(conv.participants).filter(
+      (uid) => uid !== req.user.uid,
+    );
+    if (parts.length === 0) {
+      db.prepare("DELETE FROM messages WHERE conversation_id = ?").run(
+        req.params.id,
+      );
+      db.prepare("DELETE FROM conversations WHERE id = ?").run(req.params.id);
+    } else {
+      db.prepare("UPDATE conversations SET participants = ? WHERE id = ?").run(
+        JSON.stringify(parts),
+        req.params.id,
+      );
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Delete conv error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -535,7 +726,7 @@ app.post("/api/messages/conversation", authenticateToken, (req, res) => {
     if (!isGroup) {
       const existing = db
         .prepare(
-          "SELECT id FROM conversations WHERE type = 'personal' AND participants = ?"
+          "SELECT id FROM conversations WHERE type = 'personal' AND participants = ?",
         )
         .get(JSON.stringify(parts));
 
@@ -546,13 +737,9 @@ app.post("/api/messages/conversation", authenticateToken, (req, res) => {
 
     const result = db
       .prepare(
-        "INSERT INTO conversations (type, participants, name) VALUES (?, ?, ?)"
+        "INSERT INTO conversations (type, participants, name) VALUES (?, ?, ?)",
       )
-      .run(
-        isGroup ? "group" : "personal",
-        JSON.stringify(parts),
-        name || ""
-      );
+      .run(isGroup ? "group" : "personal", JSON.stringify(parts), name || "");
 
     res.json({ success: true, id: result.lastInsertRowid });
   } catch (error) {
@@ -562,39 +749,50 @@ app.post("/api/messages/conversation", authenticateToken, (req, res) => {
 });
 
 // Add participant to conversation; auto-converts personal -> group
-app.post("/api/messages/conversation/:id/participants", authenticateToken, (req, res) => {
-  try {
-    const { uid, name } = req.body;
-    const conv = db.prepare("SELECT * FROM conversations WHERE id = ?").get(req.params.id);
-    if (!conv) return res.status(404).json({ error: "Чат не найден" });
+app.post(
+  "/api/messages/conversation/:id/participants",
+  authenticateToken,
+  (req, res) => {
+    try {
+      const { uid, name } = req.body;
+      const conv = db
+        .prepare("SELECT * FROM conversations WHERE id = ?")
+        .get(req.params.id);
+      if (!conv) return res.status(404).json({ error: "Чат не найден" });
 
-    const parts = JSON.parse(conv.participants);
-    if (!parts.includes(req.user.uid)) {
-      return res.status(403).json({ error: "Нет доступа" });
+      const parts = JSON.parse(conv.participants);
+      if (!parts.includes(req.user.uid)) {
+        return res.status(403).json({ error: "Нет доступа" });
+      }
+      if (parts.includes(uid)) {
+        return res.status(400).json({ error: "Уже в чате" });
+      }
+
+      const newParts = [...new Set([...parts, uid])].sort();
+      const newType = newParts.length > 2 ? "group" : conv.type;
+
+      // Auto-name group if converting and no name yet
+      let newName = conv.name;
+      if (newType === "group" && !newName) {
+        newName = name || "Новая группа";
+      }
+
+      db.prepare(
+        "UPDATE conversations SET participants = ?, type = ?, name = ? WHERE id = ?",
+      ).run(JSON.stringify(newParts), newType, newName, req.params.id);
+
+      res.json({
+        success: true,
+        type: newType,
+        participants: newParts,
+        name: newName,
+      });
+    } catch (error) {
+      console.error("Add participant error:", error);
+      res.status(500).json({ error: "Server error" });
     }
-    if (parts.includes(uid)) {
-      return res.status(400).json({ error: "Уже в чате" });
-    }
-
-    const newParts = [...new Set([...parts, uid])].sort();
-    const newType = newParts.length > 2 ? "group" : conv.type;
-
-    // Auto-name group if converting and no name yet
-    let newName = conv.name;
-    if (newType === "group" && !newName) {
-      newName = name || "Новая группа";
-    }
-
-    db.prepare(
-      "UPDATE conversations SET participants = ?, type = ?, name = ? WHERE id = ?"
-    ).run(JSON.stringify(newParts), newType, newName, req.params.id);
-
-    res.json({ success: true, type: newType, participants: newParts, name: newName });
-  } catch (error) {
-    console.error("Add participant error:", error);
-    res.status(500).json({ error: "Server error" });
-  }
-});
+  },
+);
 
 app.get("/api/messages/:conversationId", authenticateToken, (req, res) => {
   try {
@@ -604,7 +802,7 @@ app.get("/api/messages/:conversationId", authenticateToken, (req, res) => {
          FROM messages m 
          JOIN users u ON m.sender_id = u.uid 
          WHERE m.conversation_id = ? 
-         ORDER BY m.created_at ASC`
+         ORDER BY m.created_at ASC`,
       )
       .all(req.params.conversationId);
 
@@ -627,20 +825,29 @@ app.post(
 
       if (req.file) {
         fileUrl = `/uploads/${req.file.filename}`;
-        fileType = req.file.mimetype.startsWith("image/") ? "image" : "video";
+        if (req.file.mimetype.startsWith("image/")) fileType = "image";
+        else if (req.file.mimetype.startsWith("video/")) fileType = "video";
+        else if (req.file.mimetype.startsWith("audio/")) fileType = "audio";
+        else fileType = "file";
       }
 
       const result = db
         .prepare(
-          "INSERT INTO messages (conversation_id, sender_id, text, file_url, file_type) VALUES (?, ?, ?, ?, ?)"
+          "INSERT INTO messages (conversation_id, sender_id, text, file_url, file_type) VALUES (?, ?, ?, ?, ?)",
         )
-        .run(req.params.conversationId, req.user.uid, text || "", fileUrl, fileType);
+        .run(
+          req.params.conversationId,
+          req.user.uid,
+          text || "",
+          fileUrl,
+          fileType,
+        );
 
       res.json({ success: true, id: result.lastInsertRowid });
     } catch (error) {
       res.status(500).json({ error: "Server error" });
     }
-  }
+  },
 );
 
 app.delete("/api/messages/:messageId", authenticateToken, (req, res) => {
@@ -672,7 +879,7 @@ app.get("/api/friends", authenticateToken, (req, res) => {
            CASE WHEN f.user_id = ? THEN f.friend_id ELSE f.user_id END = u.uid
          )
          WHERE (f.user_id = ? OR f.friend_id = ?)
-         AND f.status = 'accepted'`
+         AND f.status = 'accepted'`,
       )
       .all(req.user.uid, req.user.uid, req.user.uid);
 
@@ -689,7 +896,7 @@ app.get("/api/friends/requests", authenticateToken, (req, res) => {
         `SELECT u.uid, u.username, u.avatar, f.created_at
          FROM friendships f
          JOIN users u ON f.user_id = u.uid
-         WHERE f.friend_id = ? AND f.status = 'pending'`
+         WHERE f.friend_id = ? AND f.status = 'pending'`,
       )
       .all(req.user.uid);
 
@@ -705,7 +912,7 @@ app.post("/api/friends/request", authenticateToken, (req, res) => {
 
     const existing = db
       .prepare(
-        "SELECT * FROM friendships WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)"
+        "SELECT * FROM friendships WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)",
       )
       .get(req.user.uid, friendId, friendId, req.user.uid);
 
@@ -714,11 +921,11 @@ app.post("/api/friends/request", authenticateToken, (req, res) => {
     }
 
     db.prepare(
-      "INSERT INTO friendships (user_id, friend_id, status) VALUES (?, ?, 'pending')"
+      "INSERT INTO friendships (user_id, friend_id, status) VALUES (?, ?, 'pending')",
     ).run(req.user.uid, friendId);
 
     db.prepare(
-      "INSERT INTO notifications (recipient_id, sender_id, type, message) VALUES (?, ?, 'friend_request', ?)"
+      "INSERT INTO notifications (recipient_id, sender_id, type, message) VALUES (?, ?, 'friend_request', ?)",
     ).run(friendId, req.user.uid, "sent you a friend request");
 
     res.json({ success: true });
@@ -732,11 +939,11 @@ app.post("/api/friends/accept", authenticateToken, (req, res) => {
     const { friendId } = req.body;
 
     db.prepare(
-      "UPDATE friendships SET status = 'accepted' WHERE user_id = ? AND friend_id = ?"
+      "UPDATE friendships SET status = 'accepted' WHERE user_id = ? AND friend_id = ?",
     ).run(friendId, req.user.uid);
 
     db.prepare(
-      "INSERT INTO notifications (recipient_id, sender_id, type, message) VALUES (?, ?, 'friend_accepted', ?)"
+      "INSERT INTO notifications (recipient_id, sender_id, type, message) VALUES (?, ?, 'friend_accepted', ?)",
     ).run(friendId, req.user.uid, "accepted your friend request");
 
     res.json({ success: true });
@@ -748,7 +955,7 @@ app.post("/api/friends/accept", authenticateToken, (req, res) => {
 app.delete("/api/friends/:friendId", authenticateToken, (req, res) => {
   try {
     db.prepare(
-      "DELETE FROM friendships WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)"
+      "DELETE FROM friendships WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)",
     ).run(req.user.uid, req.params.friendId, req.params.friendId, req.user.uid);
 
     res.json({ success: true });
@@ -768,7 +975,7 @@ app.get("/api/stories", authenticateToken, (req, res) => {
         `SELECT s.*, u.username, u.avatar 
          FROM stories s 
          JOIN users u ON s.user_id = u.uid 
-         ORDER BY s.created_at DESC`
+         ORDER BY s.created_at DESC`,
       )
       .all();
 
@@ -778,25 +985,34 @@ app.get("/api/stories", authenticateToken, (req, res) => {
   }
 });
 
-app.post("/api/stories", authenticateToken, upload.single("media"), (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+app.post(
+  "/api/stories",
+  authenticateToken,
+  upload.single("media"),
+  (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-    const mediaUrl = `/uploads/${req.file.filename}`;
-    const mediaType = req.file.mimetype.startsWith("image/") ? "image" : "video";
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const mediaUrl = `/uploads/${req.file.filename}`;
+      const mediaType = req.file.mimetype.startsWith("image/")
+        ? "image"
+        : "video";
+      const expiresAt = new Date(
+        Date.now() + 24 * 60 * 60 * 1000,
+      ).toISOString();
 
-    const result = db
-      .prepare(
-        "INSERT INTO stories (user_id, media_url, media_type, expires_at) VALUES (?, ?, ?, ?)"
-      )
-      .run(req.user.uid, mediaUrl, mediaType, expiresAt);
+      const result = db
+        .prepare(
+          "INSERT INTO stories (user_id, media_url, media_type, expires_at) VALUES (?, ?, ?, ?)",
+        )
+        .run(req.user.uid, mediaUrl, mediaType, expiresAt);
 
-    res.json({ success: true, id: result.lastInsertRowid });
-  } catch (error) {
-    res.status(500).json({ error: "Server error" });
-  }
-});
+      res.json({ success: true, id: result.lastInsertRowid });
+    } catch (error) {
+      res.status(500).json({ error: "Server error" });
+    }
+  },
+);
 
 // ============ NOTIFICATION ROUTES ============
 app.get("/api/notifications", authenticateToken, (req, res) => {
@@ -807,7 +1023,7 @@ app.get("/api/notifications", authenticateToken, (req, res) => {
          FROM notifications n 
          JOIN users u ON n.sender_id = u.uid 
          WHERE n.recipient_id = ? 
-         ORDER BY n.created_at DESC LIMIT 50`
+         ORDER BY n.created_at DESC LIMIT 50`,
       )
       .all(req.user.uid);
 
@@ -821,7 +1037,7 @@ app.get("/api/notifications", authenticateToken, (req, res) => {
         message: n.message,
         is_read: !!n.is_read,
         created_at: n.created_at,
-      }))
+      })),
     );
   } catch (error) {
     res.status(500).json({ error: "Server error" });
@@ -830,7 +1046,9 @@ app.get("/api/notifications", authenticateToken, (req, res) => {
 
 app.put("/api/notifications/read", authenticateToken, (req, res) => {
   try {
-    db.prepare("UPDATE notifications SET is_read = 1 WHERE recipient_id = ?").run(req.user.uid);
+    db.prepare(
+      "UPDATE notifications SET is_read = 1 WHERE recipient_id = ?",
+    ).run(req.user.uid);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: "Server error" });
@@ -840,19 +1058,35 @@ app.put("/api/notifications/read", authenticateToken, (req, res) => {
 // ============ FEED TIMER ROUTES ============
 app.get("/api/feed-timer", authenticateToken, (req, res) => {
   try {
-    let timer = db.prepare("SELECT * FROM feed_timers WHERE user_id = ?").get(req.user.uid);
+    // Premium users are never locked
+    if (hasPremium(req.user.uid)) {
+      return res.json({
+        sessionTime: 0,
+        isLocked: false,
+        lockUntil: null,
+        premium: true,
+      });
+    }
+
+    let timer = db
+      .prepare("SELECT * FROM feed_timers WHERE user_id = ?")
+      .get(req.user.uid);
 
     if (!timer) {
       db.prepare(
-        "INSERT INTO feed_timers (user_id, session_time, is_locked) VALUES (?, 0, 0)"
+        "INSERT INTO feed_timers (user_id, session_time, is_locked) VALUES (?, 0, 0)",
       ).run(req.user.uid);
       return res.json({ sessionTime: 0, isLocked: false, lockUntil: null });
     }
 
     // Check if lock expired
-    if (timer.is_locked && timer.lock_until && new Date(timer.lock_until) < new Date()) {
+    if (
+      timer.is_locked &&
+      timer.lock_until &&
+      new Date(timer.lock_until) < new Date()
+    ) {
       db.prepare(
-        "UPDATE feed_timers SET is_locked = 0, lock_until = NULL, session_time = 0 WHERE user_id = ?"
+        "UPDATE feed_timers SET is_locked = 0, lock_until = NULL, session_time = 0 WHERE user_id = ?",
       ).run(req.user.uid);
       timer = { ...timer, is_locked: 0, lock_until: null, session_time: 0 };
     }
@@ -872,7 +1106,7 @@ app.post("/api/feed-timer/update", authenticateToken, (req, res) => {
     const { sessionTime } = req.body;
     db.prepare("UPDATE feed_timers SET session_time = ? WHERE user_id = ?").run(
       sessionTime,
-      req.user.uid
+      req.user.uid,
     );
     res.json({ success: true });
   } catch (error) {
@@ -884,7 +1118,7 @@ app.post("/api/feed-timer/lock", authenticateToken, (req, res) => {
   try {
     const lockUntil = new Date(Date.now() + 30 * 60 * 1000).toISOString();
     db.prepare(
-      "UPDATE feed_timers SET is_locked = 1, lock_until = ? WHERE user_id = ?"
+      "UPDATE feed_timers SET is_locked = 1, lock_until = ? WHERE user_id = ?",
     ).run(lockUntil, req.user.uid);
     res.json({ success: true, lockUntil });
   } catch (error) {
@@ -895,10 +1129,69 @@ app.post("/api/feed-timer/lock", authenticateToken, (req, res) => {
 app.post("/api/feed-timer/reset", authenticateToken, (req, res) => {
   try {
     db.prepare(
-      "UPDATE feed_timers SET session_time = 0, is_locked = 0, lock_until = NULL WHERE user_id = ?"
+      "UPDATE feed_timers SET session_time = 0, is_locked = 0, lock_until = NULL WHERE user_id = ?",
     ).run(req.user.uid);
     res.json({ success: true });
   } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ============ PREMIUM ROUTES ============
+app.get("/api/premium/status", authenticateToken, (req, res) => {
+  try {
+    const sub = db
+      .prepare("SELECT expires_at FROM subscriptions WHERE user_id = ?")
+      .get(req.user.uid);
+    if (!sub) {
+      return res.json({ isPremium: false, expiresAt: null });
+    }
+    const isPremium = new Date(sub.expires_at) > new Date();
+    res.json({ isPremium, expiresAt: sub.expires_at });
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.post("/api/premium/activate", authenticateToken, (req, res) => {
+  try {
+    const { phone } = req.body;
+    // Simple validation: payment phone must match the configured number
+    const PAYMENT_PHONE = "+79999099549";
+    const norm = String(phone || "").replace(/[^\d+]/g, "");
+    if (norm !== PAYMENT_PHONE) {
+      return res.status(400).json({
+        error: `Перевод должен быть на ${PAYMENT_PHONE}`,
+      });
+    }
+
+    // Activate for 30 days
+    const expiresAt = new Date(
+      Date.now() + 30 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    const existing = db
+      .prepare("SELECT user_id FROM subscriptions WHERE user_id = ?")
+      .get(req.user.uid);
+
+    if (existing) {
+      db.prepare(
+        "UPDATE subscriptions SET expires_at = ?, activated_at = datetime('now') WHERE user_id = ?",
+      ).run(expiresAt, req.user.uid);
+    } else {
+      db.prepare(
+        "INSERT INTO subscriptions (user_id, expires_at) VALUES (?, ?)",
+      ).run(req.user.uid, expiresAt);
+    }
+
+    // Reset any current lock
+    db.prepare(
+      "UPDATE feed_timers SET session_time = 0, is_locked = 0, lock_until = NULL WHERE user_id = ?",
+    ).run(req.user.uid);
+
+    res.json({ success: true, expiresAt });
+  } catch (error) {
+    console.error("Premium activate error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });

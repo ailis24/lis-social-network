@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { userService, postService, friendService, messageService } from "../services";
+import {
+  userService,
+  postService,
+  friendService,
+  messageService,
+} from "../services";
 import { CameraIcon } from "@heroicons/react/24/outline";
 
 export default function Profile() {
@@ -32,14 +37,23 @@ export default function Profile() {
 
       const allPosts = await postService.getFeed();
       setPosts(allPosts.filter((post) => post.author_id === uid));
+
+      if (!isOwn) {
+        try {
+          const s = await friendService.getStatus(uid);
+          setFriendStatus(s.status || "none");
+        } catch {}
+      }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, [uid]);
+  }, [uid, isOwn]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const handleSave = async () => {
     setSavingProfile(true);
@@ -69,11 +83,18 @@ export default function Profile() {
   };
 
   const handleAddFriend = async () => {
+    if (friendStatus !== "none") return;
     try {
       await friendService.sendRequest(uid);
       setFriendStatus("sent");
     } catch (err) {
-      console.error(err);
+      // Sync UI with server state if server says it already exists
+      try {
+        const s = await friendService.getStatus(uid);
+        setFriendStatus(s.status || "sent");
+      } catch {
+        setFriendStatus("sent");
+      }
     }
   };
 
@@ -134,21 +155,32 @@ export default function Profile() {
             {isOwn && (
               <label className="absolute bottom-0 right-0 w-8 h-8 bg-white rounded-full shadow flex items-center justify-center cursor-pointer hover:bg-purple-50 border border-purple-200">
                 <CameraIcon className="w-4 h-4 text-purple-600" />
-                <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarChange}
+                />
               </label>
             )}
           </div>
 
-          {avatarError && <p className="text-red-500 text-xs mb-2">{avatarError}</p>}
+          {avatarError && (
+            <p className="text-red-500 text-xs mb-2">{avatarError}</p>
+          )}
 
           {editing ? (
             <input
               className="text-xl font-bold text-center border-b-2 border-purple-400 focus:outline-none bg-transparent mb-2"
               value={editData.username}
-              onChange={(e) => setEditData({ ...editData, username: e.target.value })}
+              onChange={(e) =>
+                setEditData({ ...editData, username: e.target.value })
+              }
             />
           ) : (
-            <h1 className="text-2xl font-bold text-gray-800">@{profile.username}</h1>
+            <h1 className="text-2xl font-bold text-gray-800">
+              @{profile.username}
+            </h1>
           )}
 
           {editing ? (
@@ -157,10 +189,14 @@ export default function Profile() {
               rows={3}
               value={editData.bio}
               placeholder="О себе..."
-              onChange={(e) => setEditData({ ...editData, bio: e.target.value })}
+              onChange={(e) =>
+                setEditData({ ...editData, bio: e.target.value })
+              }
             />
           ) : (
-            <p className="text-gray-500 mt-1 text-sm">{profile.bio || "Нет описания"}</p>
+            <p className="text-gray-500 mt-1 text-sm">
+              {profile.bio || "Нет описания"}
+            </p>
           )}
         </div>
 
@@ -171,11 +207,15 @@ export default function Profile() {
             <p className="text-xs text-gray-500">Публикации</p>
           </div>
           <div>
-            <p className="text-2xl font-bold text-gray-800">{profile.friendsCount || 0}</p>
+            <p className="text-2xl font-bold text-gray-800">
+              {profile.friendsCount || 0}
+            </p>
             <p className="text-xs text-gray-500">Друзья</p>
           </div>
           <div>
-            <p className="text-2xl font-bold text-gray-800">{profile.followersCount || 0}</p>
+            <p className="text-2xl font-bold text-gray-800">
+              {profile.followersCount || 0}
+            </p>
             <p className="text-xs text-gray-500">Подписчики</p>
           </div>
         </div>
@@ -223,15 +263,15 @@ export default function Profile() {
                 friendStatus === "sent"
                   ? "bg-green-100 text-green-600"
                   : friendStatus === "friends"
-                  ? "bg-gray-100 text-gray-500"
-                  : "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:shadow-lg"
+                    ? "bg-gray-100 text-gray-500"
+                    : "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:shadow-lg"
               }`}
             >
               {friendStatus === "sent"
                 ? "✓ Заявка отправлена"
                 : friendStatus === "friends"
-                ? "👫 В друзьях"
-                : "👤 Добавить в друзья"}
+                  ? "👫 В друзьях"
+                  : "👤 Добавить в друзья"}
             </button>
             <button
               onClick={handleMessage}
@@ -245,7 +285,9 @@ export default function Profile() {
       </div>
 
       {/* Posts grid */}
-      <h2 className="text-white font-bold text-lg mb-3 drop-shadow">Публикации</h2>
+      <h2 className="text-white font-bold text-lg mb-3 drop-shadow">
+        Публикации
+      </h2>
       {posts.length === 0 ? (
         <div className="text-center py-12 text-white/70">
           <div className="text-4xl mb-2">📭</div>
@@ -271,10 +313,49 @@ export default function Profile() {
               {post.content && (
                 <p className="text-gray-800 text-sm">{post.content}</p>
               )}
+              {post.poll_data && (
+                <div className="mt-2 bg-purple-50 rounded-xl p-3">
+                  <p className="font-semibold text-gray-700 text-sm mb-2">
+                    📊 {post.poll_data.question}
+                  </p>
+                  {post.poll_data.options?.map((opt, i) => {
+                    const o =
+                      typeof opt === "string" ? { text: opt, votes: 0 } : opt;
+                    const total =
+                      post.poll_data.options.reduce(
+                        (s, x) =>
+                          s + (typeof x === "string" ? 0 : x.votes || 0),
+                        0,
+                      ) || 0;
+                    const pct = total
+                      ? Math.round(((o.votes || 0) / total) * 100)
+                      : 0;
+                    return (
+                      <div
+                        key={i}
+                        className="relative overflow-hidden rounded-full border border-purple-200 mb-1.5"
+                      >
+                        <div
+                          className="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-200 to-pink-200"
+                          style={{ width: `${pct}%` }}
+                        />
+                        <div className="relative flex items-center justify-between px-3 py-1.5 text-xs text-gray-700">
+                          <span>{o.text}</span>
+                          <span className="font-semibold text-purple-700">
+                            {pct}% ({o.votes || 0})
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
                 <span>❤️ {post.likes?.length || 0}</span>
                 <span>💬 {post.comments_count}</span>
-                <span>{new Date(post.created_at).toLocaleDateString("ru-RU")}</span>
+                <span>
+                  {new Date(post.created_at).toLocaleDateString("ru-RU")}
+                </span>
               </div>
             </div>
           ))}

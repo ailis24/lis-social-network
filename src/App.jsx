@@ -27,9 +27,7 @@ const ProtectedRoute = ({ children }) => {
 const AppLayout = ({ children }) => (
   <>
     <Header />
-    <main className="pt-2 pb-20 sm:pb-4">
-      {children}
-    </main>
+    <main className="pt-2 pb-20 sm:pb-4">{children}</main>
   </>
 );
 
@@ -39,38 +37,69 @@ function AppRoutes() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
-        <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
-        <Route path="/register" element={user ? <Navigate to="/" replace /> : <Register />} />
+        <Route
+          path="/login"
+          element={user ? <Navigate to="/" replace /> : <Login />}
+        />
+        <Route
+          path="/register"
+          element={user ? <Navigate to="/" replace /> : <Register />}
+        />
 
-        <Route path="/" element={
-          <ProtectedRoute>
-            <AppLayout><Feed /></AppLayout>
-          </ProtectedRoute>
-        } />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <Feed />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
 
-        <Route path="/profile/:uid" element={
-          <ProtectedRoute>
-            <AppLayout><Profile /></AppLayout>
-          </ProtectedRoute>
-        } />
+        <Route
+          path="/profile/:uid"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <Profile />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
 
-        <Route path="/profile" element={
-          <ProtectedRoute>
-            <AppLayout><Profile /></AppLayout>
-          </ProtectedRoute>
-        } />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <Profile />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
 
-        <Route path="/messages" element={
-          <ProtectedRoute>
-            <AppLayout><Messages /></AppLayout>
-          </ProtectedRoute>
-        } />
+        <Route
+          path="/messages"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <Messages />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
 
-        <Route path="/search" element={
-          <ProtectedRoute>
-            <AppLayout><Search /></AppLayout>
-          </ProtectedRoute>
-        } />
+        <Route
+          path="/search"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <Search />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

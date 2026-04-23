@@ -40,7 +40,9 @@ export default function Register() {
         </div>
 
         <div className="bg-white/95 rounded-3xl shadow-2xl p-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Регистрация</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
+            Регистрация
+          </h2>
 
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl mb-4">
@@ -87,7 +89,10 @@ export default function Register() {
 
           <p className="text-center text-sm text-gray-500 mt-6">
             Уже есть аккаунт?{" "}
-            <Link to="/login" className="text-purple-600 font-semibold hover:underline">
+            <Link
+              to="/login"
+              className="text-purple-600 font-semibold hover:underline"
+            >
               Войти
             </Link>
           </p>

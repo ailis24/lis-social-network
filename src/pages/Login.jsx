@@ -1,14 +1,23 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { userService } from "../services";
 
 export default function Login() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [userCount, setUserCount] = useState(null);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    userService
+      .getCount()
+      .then((d) => setUserCount(d.count))
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -30,10 +39,17 @@ export default function Login() {
         <div className="text-center mb-8">
           <h1 className="lis-logo text-6xl mb-2">Lis</h1>
           <p className="text-white/80 text-sm">Социальная сеть</p>
+          {userCount !== null && (
+            <p className="text-white/90 text-sm mt-2 font-semibold">
+              🦊 Нас уже {userCount.toLocaleString("ru-RU")}!
+            </p>
+          )}
         </div>
 
         <div className="bg-white/95 rounded-3xl shadow-2xl p-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">Войти</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
+            Войти
+          </h2>
 
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl mb-4">
@@ -71,7 +87,10 @@ export default function Login() {
 
           <p className="text-center text-sm text-gray-500 mt-6">
             Нет аккаунта?{" "}
-            <Link to="/register" className="text-purple-600 font-semibold hover:underline">
+            <Link
+              to="/register"
+              className="text-purple-600 font-semibold hover:underline"
+            >
               Зарегистрироваться
             </Link>
           </p>
