@@ -1,4 +1,5 @@
-const API_URL = "";
+// Берём адрес из переменной окружения (для Vercel) или используем localhost для разработки
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
 const getAuthHeader = () => {
   const token = localStorage.getItem("token");
