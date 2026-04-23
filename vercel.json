@@ -8,9 +8,6 @@
       "source": "/api/(.*)",
       "destination": "https://353ac8e5-0e20-426c-8727-186f3b0206f5-00-2lrwd6jh7gqjd.sisko.replit.dev/api/$1"
     },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
