@@ -302,7 +302,19 @@ export const storyService = {
       headers: getAuthHeader(),
       body: formData,
     });
-    if (!res.ok) throw new Error("Story creation failed");
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Story creation failed");
+    }
+    return await res.json();
+  },
+
+  deleteStory: async (id) => {
+    const res = await fetch(`${API_URL}/api/stories/${id}`, {
+      method: "DELETE",
+      headers: getAuthHeader(),
+    });
+    if (!res.ok) throw new Error("Delete failed");
     return await res.json();
   },
 };
@@ -351,6 +363,44 @@ export const timerService = {
       headers: getAuthHeader(),
     });
     if (!res.ok) throw new Error("Lock failed");
+    return await res.json();
+  },
+};
+
+export const challengeService = {
+  getRandom: async () => {
+    const res = await fetch(`${API_URL}/api/challenges/random`, {
+      headers: getAuthHeader(),
+    });
+    if (!res.ok) throw new Error("Random challenge failed");
+    return await res.json();
+  },
+
+  create: async (text, emoji = "💪") => {
+    const res = await fetch(`${API_URL}/api/challenges`, {
+      method: "POST",
+      headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+      body: JSON.stringify({ text, emoji }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Create challenge failed");
+    return data;
+  },
+
+  getMine: async () => {
+    const res = await fetch(`${API_URL}/api/challenges/mine`, {
+      headers: getAuthHeader(),
+    });
+    if (!res.ok) throw new Error("Get mine failed");
+    return await res.json();
+  },
+
+  delete: async (id) => {
+    const res = await fetch(`${API_URL}/api/challenges/${id}`, {
+      method: "DELETE",
+      headers: getAuthHeader(),
+    });
+    if (!res.ok) throw new Error("Delete challenge failed");
     return await res.json();
   },
 };
