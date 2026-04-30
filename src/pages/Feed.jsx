@@ -6,6 +6,7 @@ import {
   storyService,
   timerService,
   premiumService,
+  challengeService,
 } from "../services";
 import { PhotoIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
 import StickerPicker from "../components/StickerPicker";
@@ -115,28 +116,258 @@ const PremiumModal = ({ onClose, onActivated }) => {
   );
 };
 
+// ─── Story Recorder (15-second video) ─────────────────────────────────────────
+const STORY_MAX_SECONDS = 15;
+
+const StoryRecorder = ({ onClose, onUploaded }) => {
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const recorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const stopTimerRef = useRef(null);
+
+  const [phase, setPhase] = useState("preview"); // preview | recording | uploading | error
+  const [seconds, setSeconds] = useState(0);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user" },
+          audio: true,
+        });
+        if (!alive) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      } catch (err) {
+        setError("Нет доступа к камере: " + (err.message || ""));
+        setPhase("error");
+      }
+    })();
+    return () => {
+      alive = false;
+      if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
+      if (recorderRef.current && recorderRef.current.state !== "inactive") {
+        try {
+          recorderRef.current.stop();
+        } catch {}
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
+
+  // Tick during recording
+  useEffect(() => {
+    if (phase !== "recording") return;
+    const iv = setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => clearInterval(iv);
+  }, [phase]);
+
+  const startRecording = () => {
+    setError("");
+    const stream = streamRef.current;
+    if (!stream) return;
+    const mimeCandidates = [
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
+      "video/webm",
+      "video/mp4",
+    ];
+    const mime =
+      mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || "";
+    const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+    chunksRef.current = [];
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+    };
+    recorder.onstop = () => doUpload(recorder.mimeType || "video/webm");
+    recorder.start();
+    recorderRef.current = recorder;
+    setSeconds(0);
+    setPhase("recording");
+    // Hard stop at 15 seconds
+    stopTimerRef.current = setTimeout(() => {
+      if (recorder.state !== "inactive") recorder.stop();
+    }, STORY_MAX_SECONDS * 1000);
+  };
+
+  const stopRecording = () => {
+    if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
+    if (recorderRef.current && recorderRef.current.state !== "inactive") {
+      recorderRef.current.stop();
+    }
+  };
+
+  const doUpload = async (mimeType) => {
+    setPhase("uploading");
+    try {
+      const blob = new Blob(chunksRef.current, { type: mimeType });
+      const ext = mimeType.includes("mp4") ? "mp4" : "webm";
+      const file = new File([blob], `story-${Date.now()}.${ext}`, {
+        type: mimeType,
+      });
+      await storyService.createStory(file);
+      onUploaded && onUploaded();
+      onClose();
+    } catch (err) {
+      setError("Ошибка загрузки: " + (err.message || ""));
+      setPhase("error");
+    }
+  };
+
+  const remaining = STORY_MAX_SECONDS - seconds;
+  const progress = (seconds / STORY_MAX_SECONDS) * 100;
+
+  return (
+    <div className="fixed inset-0 bg-black z-50 flex flex-col">
+      <div className="flex items-center justify-between p-4 text-white">
+        <h2 className="font-semibold">Сторис · до 15 сек</h2>
+        <button onClick={onClose} className="text-2xl px-2">
+          ✕
+        </button>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center bg-black relative">
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          className="max-h-full max-w-full"
+        />
+        {phase === "recording" && (
+          <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-2">
+            <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+            {remaining}s
+          </div>
+        )}
+      </div>
+
+      {/* Progress bar */}
+      {phase === "recording" && (
+        <div className="h-1 bg-white/20">
+          <div
+            className="h-full bg-gradient-to-r from-pink-400 to-red-500 transition-all duration-1000"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
+
+      <div className="p-4 flex justify-center bg-black">
+        {phase === "preview" && (
+          <button
+            onClick={startRecording}
+            className="w-16 h-16 rounded-full bg-red-500 border-4 border-white shadow-xl active:scale-95 transition"
+            aria-label="Начать запись"
+          />
+        )}
+        {phase === "recording" && (
+          <button
+            onClick={stopRecording}
+            className="w-16 h-16 rounded-2xl bg-red-500 border-4 border-white shadow-xl active:scale-95 transition"
+            aria-label="Остановить запись"
+          />
+        )}
+        {phase === "uploading" && <p className="text-white">Загружаем...</p>}
+        {phase === "error" && (
+          <div className="text-center">
+            <p className="text-red-300 mb-2">{error}</p>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-white/20 rounded-xl text-white"
+            >
+              Закрыть
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ─── Stories Bar ──────────────────────────────────────────────────────────────
 const StoriesBar = ({ currentUser }) => {
   const [stories, setStories] = useState([]);
   const [viewing, setViewing] = useState(null);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [showRecorder, setShowRecorder] = useState(false);
+  const [showChooser, setShowChooser] = useState(false);
+  const [now, setNow] = useState(Date.now());
   const fileRef = useRef();
 
-  useEffect(() => {
+  const loadStories = () => {
     storyService
       .getStories()
       .then(setStories)
       .catch(() => {});
+  };
+
+  useEffect(() => {
+    loadStories();
+  }, []);
+
+  // Tick every minute so the "expires in" labels and auto-removal stay current
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setNow(Date.now());
+      // Drop locally any story already expired (server also auto-cleans)
+      setStories((arr) =>
+        arr.filter((s) => new Date(s.expires_at).getTime() > Date.now()),
+      );
+    }, 60 * 1000);
+    return () => clearInterval(iv);
   }, []);
 
   const handleUpload = async (e) => {
     const file = e.target.files[0];
+    e.target.value = "";
     if (!file) return;
+    // Client-side checks before sending — server enforces them too
+    const isVideo = file.type.startsWith("video/");
+    const isImage = file.type.startsWith("image/");
+    if (!isVideo && !isImage) {
+      alert("Только фото или видео");
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      alert("Файл слишком большой (макс 50 МБ)");
+      return;
+    }
     try {
       await storyService.createStory(file);
-      const updated = await storyService.getStories();
-      setStories(updated);
+      loadStories();
     } catch (err) {
-      console.error("Story upload error:", err);
+      alert("Ошибка загрузки сторис");
+    }
+  };
+
+  const handleStoryDelete = async (id) => {
+    if (!confirm("Удалить сторис?")) return;
+    try {
+      await storyService.deleteStory(id);
+      setStories((arr) => arr.filter((s) => s.id !== id));
+      // Refresh viewing group
+      if (viewing) {
+        const remaining = viewing.items.filter((i) => i.id !== id);
+        if (remaining.length === 0) setViewing(null);
+        else {
+          setViewing({ ...viewing, items: remaining });
+          setActiveIdx(0);
+        }
+      }
+    } catch {
+      alert("Не удалось удалить");
     }
   };
 
@@ -148,12 +379,28 @@ const StoriesBar = ({ currentUser }) => {
   });
   const groups = Object.values(grouped);
 
+  const formatRemaining = (expiresAt) => {
+    const diff = new Date(expiresAt).getTime() - now;
+    if (diff <= 0) return "истекает";
+    const h = Math.floor(diff / (60 * 60 * 1000));
+    const m = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+    if (h > 0) return `${h}ч ${m}м`;
+    return `${m}м`;
+  };
+
+  const openViewer = (group) => {
+    setViewing(group);
+    setActiveIdx(0);
+  };
+
+  const currentItem = viewing?.items?.[activeIdx];
+
   return (
     <div className="bg-white/90 backdrop-blur rounded-2xl shadow mb-4 p-3">
       <div className="flex gap-3 overflow-x-auto scrollbar-hide">
         {/* Add story button */}
         <button
-          onClick={() => fileRef.current.click()}
+          onClick={() => setShowChooser(true)}
           className="flex-shrink-0 flex flex-col items-center gap-1"
         >
           <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-2xl border-2 border-white shadow">
@@ -173,7 +420,7 @@ const StoriesBar = ({ currentUser }) => {
         {groups.map((group) => (
           <button
             key={group.user_id}
-            onClick={() => setViewing(group)}
+            onClick={() => openViewer(group)}
             className="flex-shrink-0 flex flex-col items-center gap-1"
           >
             <div className="w-14 h-14 rounded-full p-0.5 bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-400">
@@ -191,42 +438,145 @@ const StoriesBar = ({ currentUser }) => {
         ))}
       </div>
 
-      {/* Story viewer modal */}
-      {viewing && (
+      {/* Source chooser */}
+      {showChooser && (
         <div
-          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center"
+          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowChooser(false)}
+        >
+          <div
+            className="bg-white rounded-3xl p-6 max-w-xs w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-bold text-lg text-gray-800 mb-4 text-center">
+              Новая сторис
+            </h3>
+            <button
+              onClick={() => {
+                setShowChooser(false);
+                setShowRecorder(true);
+              }}
+              className="w-full py-3 mb-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-2xl"
+            >
+              📷 Снять видео (15 сек)
+            </button>
+            <button
+              onClick={() => {
+                setShowChooser(false);
+                fileRef.current?.click();
+              }}
+              className="w-full py-3 bg-gray-100 text-gray-700 font-bold rounded-2xl"
+            >
+              🖼 Загрузить файл
+            </button>
+            <p className="text-xs text-gray-400 text-center mt-3">
+              Сторис исчезнет через 24 часа
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Recorder */}
+      {showRecorder && (
+        <StoryRecorder
+          onClose={() => setShowRecorder(false)}
+          onUploaded={loadStories}
+        />
+      )}
+
+      {/* Story viewer modal */}
+      {viewing && currentItem && (
+        <div
+          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center"
           onClick={() => setViewing(null)}
         >
           <div
             className="relative max-w-sm w-full mx-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              onClick={() => setViewing(null)}
-              className="absolute top-2 right-2 text-white text-2xl z-10"
-            >
-              ✕
-            </button>
-            <div className="text-white text-sm mb-2 flex items-center gap-2">
-              <img
-                src={viewing.avatar || "/fox.gif"}
-                alt=""
-                className="w-8 h-8 rounded-full object-cover"
-              />
-              <span className="font-semibold">@{viewing.username}</span>
+            {/* Progress dots */}
+            <div className="flex gap-1 mb-2">
+              {viewing.items.map((_, i) => (
+                <div
+                  key={i}
+                  className={`h-1 flex-1 rounded-full ${
+                    i === activeIdx ? "bg-white" : "bg-white/30"
+                  }`}
+                />
+              ))}
             </div>
-            {viewing.items[0]?.media_type === "video" ? (
-              <video autoPlay controls className="w-full rounded-xl">
-                <source src={viewing.items[0].media_url} />
+            <div className="text-white text-sm mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <img
+                  src={viewing.avatar || "/fox.gif"}
+                  alt=""
+                  className="w-8 h-8 rounded-full object-cover"
+                />
+                <span className="font-semibold">@{viewing.username}</span>
+                <span className="text-xs text-white/60">
+                  · ⏳ {formatRemaining(currentItem.expires_at)}
+                </span>
+              </div>
+              <button
+                onClick={() => setViewing(null)}
+                className="text-white text-2xl px-2"
+              >
+                ✕
+              </button>
+            </div>
+            {currentItem.media_type === "video" ? (
+              <video
+                key={currentItem.id}
+                autoPlay
+                controls
+                className="w-full rounded-xl"
+                onEnded={() => {
+                  if (activeIdx + 1 < viewing.items.length) {
+                    setActiveIdx(activeIdx + 1);
+                  } else {
+                    setViewing(null);
+                  }
+                }}
+              >
+                <source src={currentItem.media_url} />
               </video>
             ) : (
               <img
-                src={viewing.items[0]?.media_url}
+                src={currentItem.media_url}
                 alt="Story"
                 className="w-full rounded-xl"
                 loading="lazy"
               />
             )}
+
+            {/* Nav + delete */}
+            <div className="flex justify-between items-center mt-3">
+              <button
+                onClick={() => setActiveIdx((i) => Math.max(0, i - 1))}
+                disabled={activeIdx === 0}
+                className="text-white/80 disabled:opacity-30 px-3 py-1"
+              >
+                ‹ Пред
+              </button>
+              {(viewing.user_id === currentUser?.uid ||
+                currentUser?.is_admin) && (
+                <button
+                  onClick={() => handleStoryDelete(currentItem.id)}
+                  className="text-red-300 hover:text-red-400 text-sm"
+                >
+                  🗑 Удалить
+                </button>
+              )}
+              <button
+                onClick={() =>
+                  setActiveIdx((i) => Math.min(viewing.items.length - 1, i + 1))
+                }
+                disabled={activeIdx >= viewing.items.length - 1}
+                className="text-white/80 disabled:opacity-30 px-3 py-1"
+              >
+                След ›
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -265,15 +615,38 @@ const FeedTimerModal = ({ onExercise, onBreak }) => (
 
 // ─── Exercise Modal ────────────────────────────────────────────────────────────
 const ExerciseModal = ({ onDone }) => {
-  const exercises = [
-    { emoji: "🏃", name: "10 прыжков на месте" },
-    { emoji: "💪", name: "10 отжиманий" },
-    { emoji: "🧘", name: "Глубокое дыхание — 5 вдохов" },
-    { emoji: "🚶", name: "Встань и пройдись 2 минуты" },
-    { emoji: "🤸", name: "10 приседаний" },
+  const builtInExercises = [
+    { emoji: "🏃", name: "10 прыжков на месте", author_name: null },
+    { emoji: "💪", name: "10 отжиманий", author_name: null },
+    { emoji: "🧘", name: "Глубокое дыхание — 5 вдохов", author_name: null },
+    { emoji: "🚶", name: "Встань и пройдись 2 минуты", author_name: null },
+    { emoji: "🤸", name: "10 приседаний", author_name: null },
   ];
-  const exRef = useRef(exercises[Math.floor(Math.random() * exercises.length)]);
-  const ex = exRef.current;
+
+  const [ex, setEx] = useState(
+    () => builtInExercises[Math.floor(Math.random() * builtInExercises.length)],
+  );
+
+  // Try fetch a user-created challenge; mix it into rotation (~50% chance)
+  useEffect(() => {
+    let alive = true;
+    challengeService
+      .getRandom()
+      .then((data) => {
+        if (!alive || !data?.challenge) return;
+        if (Math.random() < 0.5) {
+          setEx({
+            emoji: data.challenge.emoji || "💪",
+            name: data.challenge.text,
+            author_name: data.challenge.author_name,
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -308,10 +681,6 @@ const ExerciseModal = ({ onDone }) => {
         audio: true,
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(() => {});
-      }
       const mimeCandidates = [
         "video/webm;codecs=vp9,opus",
         "video/webm;codecs=vp8,opus",
@@ -332,6 +701,7 @@ const ExerciseModal = ({ onDone }) => {
       recorder.start();
       recorderRef.current = recorder;
       setSeconds(0);
+      // Switch to recording phase first — the <video> element is rendered there
       setPhase("recording");
     } catch (err) {
       console.error(err);
@@ -339,6 +709,25 @@ const ExerciseModal = ({ onDone }) => {
       setPhase("error");
     }
   };
+
+  // Attach the stream to the video element once it appears in the DOM
+  useEffect(() => {
+    if (phase !== "recording") return;
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!video || !stream) return;
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+    const tryPlay = () => {
+      video.play().catch(() => {});
+    };
+    tryPlay();
+    video.addEventListener("loadedmetadata", tryPlay);
+    return () => {
+      video.removeEventListener("loadedmetadata", tryPlay);
+    };
+  }, [phase]);
 
   const handleStop = async (mimeType) => {
     setPhase("uploading");
@@ -381,7 +770,13 @@ const ExerciseModal = ({ onDone }) => {
         <h2 className="text-xl font-bold text-gray-800 mb-1">
           Твоё упражнение:
         </h2>
-        <p className="text-lg text-purple-600 font-semibold mb-4">{ex.name}</p>
+        <p className="text-lg text-purple-600 font-semibold mb-1">{ex.name}</p>
+        {ex.author_name && (
+          <p className="text-xs text-gray-400 mb-3">
+            Задание от @{ex.author_name}
+          </p>
+        )}
+        {!ex.author_name && <div className="mb-3" />}
 
         {phase === "idle" && (
           <>
@@ -451,6 +846,144 @@ const ExerciseModal = ({ onDone }) => {
               </button>
             </div>
           </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Create Challenge Modal ────────────────────────────────────────────────────
+const CreateChallengeModal = ({ onClose }) => {
+  const EMOJIS = ["💪", "🏃", "🤸", "🧘", "🚶", "🕺", "💃", "🤾", "🦵", "🙌"];
+  const [text, setText] = useState("");
+  const [emoji, setEmoji] = useState("💪");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [mine, setMine] = useState([]);
+  const [success, setSuccess] = useState(false);
+
+  const loadMine = () => {
+    challengeService
+      .getMine()
+      .then(setMine)
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    loadMine();
+  }, []);
+
+  const submit = async () => {
+    setError("");
+    if (text.trim().length < 3) {
+      setError("Минимум 3 символа");
+      return;
+    }
+    setBusy(true);
+    try {
+      await challengeService.create(text.trim(), emoji);
+      setText("");
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 2000);
+      loadMine();
+    } catch (e) {
+      setError(e.message || "Ошибка");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeOne = async (id) => {
+    try {
+      await challengeService.delete(id);
+      setMine((arr) => arr.filter((c) => c.id !== id));
+    } catch {}
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-gray-800">
+            ✏ Задание для других
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-700 text-2xl leading-none"
+          >
+            ×
+          </button>
+        </div>
+        <p className="text-sm text-gray-500 mb-3">
+          Придумай задание — оно случайно выпадет другим пользователям, когда у
+          них закончится таймер ленты.
+        </p>
+
+        <div className="flex gap-2 mb-2">
+          <select
+            value={emoji}
+            onChange={(e) => setEmoji(e.target.value)}
+            className="px-2 py-2 rounded-xl border border-gray-200 text-xl"
+          >
+            {EMOJIS.map((e) => (
+              <option key={e} value={e}>
+                {e}
+              </option>
+            ))}
+          </select>
+          <input
+            type="text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            maxLength={200}
+            placeholder="Например: 15 приседаний"
+            className="flex-1 px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-purple-400"
+          />
+        </div>
+
+        {error && (
+          <p className="text-red-500 text-sm bg-red-50 p-2 rounded-lg mb-2">
+            {error}
+          </p>
+        )}
+        {success && (
+          <p className="text-green-600 text-sm bg-green-50 p-2 rounded-lg mb-2">
+            ✅ Задание добавлено
+          </p>
+        )}
+
+        <button
+          onClick={submit}
+          disabled={busy}
+          className="w-full py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl disabled:opacity-50"
+        >
+          {busy ? "..." : "Добавить"}
+        </button>
+
+        {mine.length > 0 && (
+          <div className="mt-5">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">
+              Мои задания ({mine.length})
+            </h3>
+            <ul className="space-y-1.5">
+              {mine.map((c) => (
+                <li
+                  key={c.id}
+                  className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2"
+                >
+                  <span className="text-sm text-gray-700 truncate pr-2">
+                    {c.emoji} {c.text}
+                  </span>
+                  <button
+                    onClick={() => removeOne(c.id)}
+                    className="text-gray-400 hover:text-red-500 text-lg shrink-0"
+                  >
+                    🗑
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
     </div>
@@ -578,13 +1111,25 @@ const Post = ({
             {new Date(post.created_at).toLocaleString("ru-RU")}
           </p>
         </div>
-        {post.author_id === currentUser?.uid && (
+        {(post.author_id === currentUser?.uid || currentUser?.is_admin) && (
           <button
             onClick={() => {
-              if (confirm("Удалить эту публикацию?")) onDelete(post.id);
+              const isMine = post.author_id === currentUser?.uid;
+              const msg = isMine
+                ? "Удалить эту публикацию?"
+                : "🛡 Удалить как администратор? (нарушения 18+, оскорбление религии, терроризм)";
+              if (confirm(msg)) onDelete(post.id);
             }}
-            className="ml-auto text-gray-300 hover:text-red-500 text-xl px-2"
-            title="Удалить пост"
+            className={`ml-auto text-xl px-2 ${
+              post.author_id === currentUser?.uid
+                ? "text-gray-300 hover:text-red-500"
+                : "text-red-400 hover:text-red-600"
+            }`}
+            title={
+              post.author_id === currentUser?.uid
+                ? "Удалить пост"
+                : "Удалить как администратор"
+            }
           >
             🗑
           </button>
@@ -1050,6 +1595,9 @@ export default function Feed() {
   const [premiumUntil, setPremiumUntil] = useState(null);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
 
+  // Challenge creation modal
+  const [showChallengeModal, setShowChallengeModal] = useState(false);
+
   useEffect(() => {
     premiumService
       .getStatus()
@@ -1220,21 +1768,35 @@ export default function Feed() {
               ? ` до ${new Date(premiumUntil).toLocaleDateString("ru-RU")}`
               : ""}
           </span>
-          <span>Без таймера</span>
+          <button
+            onClick={() => setShowChallengeModal(true)}
+            className="text-pink-200 font-semibold hover:text-pink-100"
+          >
+            ✏ Задание
+          </button>
         </div>
       ) : (
         !locked && (
           <div className="mb-3">
-            <div className="flex justify-between items-center text-xs text-white/70 mb-1">
+            <div className="flex justify-between items-center text-xs text-white/70 mb-1 gap-2">
               <span>
                 ⏱ {timerMins}:{timerSecs.toString().padStart(2, "0")}
               </span>
-              <button
-                onClick={() => setShowPremiumModal(true)}
-                className="text-yellow-200 font-semibold hover:text-yellow-100"
-              >
-                💎 Премиум
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowChallengeModal(true)}
+                  className="text-pink-200 font-semibold hover:text-pink-100"
+                  title="Придумать задание для других"
+                >
+                  ✏ Задание
+                </button>
+                <button
+                  onClick={() => setShowPremiumModal(true)}
+                  className="text-yellow-200 font-semibold hover:text-yellow-100"
+                >
+                  💎 Премиум
+                </button>
+              </div>
               <span>10:00</span>
             </div>
             <div className="h-1.5 bg-white/30 rounded-full overflow-hidden">
@@ -1257,6 +1819,9 @@ export default function Feed() {
           onClose={() => setShowPremiumModal(false)}
           onActivated={handlePremiumActivated}
         />
+      )}
+      {showChallengeModal && (
+        <CreateChallengeModal onClose={() => setShowChallengeModal(false)} />
       )}
 
       {locked ? (
