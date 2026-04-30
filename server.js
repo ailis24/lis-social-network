@@ -414,7 +414,7 @@ app.post("/api/auth/register", authLimiter, async (req, res) => {
       "INSERT INTO users (uid, username, phone, password_hash, avatar, bio, is_admin) VALUES (?, ?, ?, ?, '', '', ?)",
     ).run(uid, username, normPhone, passwordHash, isAdmin);
 
-    const token = jwt.sign({ uid, username }, JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign({ uid, username, is_admin: user.is_admin || 0 }, JWT_SECRET, { expiresIn: "7d" });
     res.json({
       token,
       user: {
