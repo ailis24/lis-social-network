@@ -4,9 +4,13 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "path";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import Database from "better-sqlite3";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import hpp from "hpp";
 
 dotenv.config();
 
@@ -15,7 +19,19 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || "lis_social_secret_key_2024";
+
+// JWT secret: must be set in production. In dev, generate a random one if missing
+// (so tokens become invalid after every restart, which is the safe default).
+const JWT_SECRET =
+  process.env.JWT_SECRET ||
+  (process.env.NODE_ENV === "production"
+    ? (() => {
+        console.error(
+          "FATAL: JWT_SECRET env variable is required in production",
+        );
+        process.exit(1);
+      })()
+    : crypto.randomBytes(64).toString("hex"));
 
 // SQLite setup
 const db = new Database(path.join(__dirname, "lis_users.db"));
@@ -117,6 +133,14 @@ db.exec(`
     expires_at TEXT NOT NULL,
     activated_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS challenges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    author_id TEXT NOT NULL,
+    text TEXT NOT NULL,
+    emoji TEXT DEFAULT '💪',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // Migration: add file_url to comments
@@ -143,28 +167,155 @@ try {
   console.error("Migration error:", e);
 }
 
+// Migration: add is_admin column
+try {
+  const cols = db.prepare("PRAGMA table_info(users)").all();
+  if (!cols.some((c) => c.name === "is_admin")) {
+    db.exec("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0");
+  }
+} catch (e) {
+  console.error("Admin migration error:", e);
+}
+
+// Admin phones from env (comma-separated). Default: project owner phone.
+const ADMIN_PHONES = (process.env.ADMIN_PHONES || "+79999099549")
+  .split(",")
+  .map((p) => p.replace(/[^\d+]/g, ""))
+  .filter(Boolean);
+
+const isAdminPhone = (phone) => {
+  const norm = String(phone || "").replace(/[^\d+]/g, "");
+  return ADMIN_PHONES.includes(norm);
+};
+
+// Promote any registered users whose phone matches ADMIN_PHONES
+try {
+  if (ADMIN_PHONES.length) {
+    const placeholders = ADMIN_PHONES.map(() => "?").join(",");
+    db.prepare(
+      `UPDATE users SET is_admin = 1 WHERE phone IN (${placeholders})`,
+    ).run(...ADMIN_PHONES);
+  }
+} catch (e) {
+  console.error("Admin promote error:", e);
+}
+
 console.log("✅ SQLite database ready");
 console.log("========================================");
 console.log(`🚀 Lis API server will run on port ${PORT}`);
 console.log("========================================");
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// ============ SECURITY MIDDLEWARE ============
+// Trust proxy (Replit / production load balancer) for accurate rate limiting
+app.set("trust proxy", 1);
 
-// Multer config
+// Security headers (XSS, clickjacking, MIME sniffing, etc.)
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // disabled for /uploads cross-origin media
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  }),
+);
+
+// CORS — restrict to known origins in production, permissive in dev
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true); // same-origin / curl
+      if (process.env.NODE_ENV !== "production") return cb(null, true);
+      if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+        return cb(null, true);
+      }
+      return cb(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  }),
+);
+
+// Body size limit + HTTP Parameter Pollution protection
+app.use(express.json({ limit: "200kb" }));
+app.use(express.urlencoded({ extended: true, limit: "200kb" }));
+app.use(hpp());
+
+// Rate limiters
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 200, // 200 req / IP / minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Слишком много запросов, попробуйте позже" },
+});
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 20, // 20 login/register attempts per IP per 15 min
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Слишком много попыток входа, попробуйте через 15 минут" },
+});
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Слишком много загрузок, подождите минуту" },
+});
+app.use("/api/", generalLimiter);
+
+app.use(
+  "/uploads",
+  express.static(path.join(__dirname, "uploads"), {
+    maxAge: "1d",
+    setHeaders: (res) => {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader(
+        "Content-Security-Policy",
+        "default-src 'none'; img-src 'self'; media-src 'self'",
+      );
+    },
+  }),
+);
+
+// Multer config — sanitize filename, restrict mimetypes, cap size at 50MB
+const ALLOWED_MIME = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/webm",
+  "audio/wav",
+  "audio/ogg",
+  "application/pdf",
+]);
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, "uploads/");
   },
   filename: (req, file, cb) => {
-    cb(null, Date.now() + "-" + file.originalname);
+    // Strip path components and dangerous chars from original name
+    const base = path
+      .basename(file.originalname)
+      .replace(/[^a-zA-Z0-9._-]/g, "_")
+      .slice(-60);
+    const safe = `${Date.now()}-${crypto.randomBytes(6).toString("hex")}-${base || "file"}`;
+    cb(null, safe);
   },
 });
 const upload = multer({
   storage,
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024, files: 3 },
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_MIME.has(file.mimetype)) return cb(null, true);
+    cb(new Error("Недопустимый тип файла"));
+  },
 });
 
 // Auth middleware
@@ -210,7 +361,7 @@ const hasPremium = (uid) => {
 // ============ AUTH ROUTES ============
 const normalizePhone = (phone) => String(phone || "").replace(/[^\d+]/g, "");
 
-app.post("/api/auth/register", async (req, res) => {
+app.post("/api/auth/register", authLimiter, async (req, res) => {
   try {
     const { username, phone, password } = req.body;
     const normPhone = normalizePhone(phone);
@@ -220,8 +371,25 @@ app.post("/api/auth/register", async (req, res) => {
         .status(400)
         .json({ error: "Никнейм, телефон и пароль обязательны" });
     }
-    if (normPhone.length < 6) {
+    if (normPhone.length < 6 || normPhone.length > 20) {
       return res.status(400).json({ error: "Некорректный номер телефона" });
+    }
+    if (
+      typeof username !== "string" ||
+      username.length < 2 ||
+      username.length > 30 ||
+      !/^[a-zA-Zа-яА-Я0-9_.-]+$/u.test(username)
+    ) {
+      return res.status(400).json({
+        error: "Никнейм: 2-30 символов, только буквы, цифры, _ . -",
+      });
+    }
+    if (
+      typeof password !== "string" ||
+      password.length < 6 ||
+      password.length > 100
+    ) {
+      return res.status(400).json({ error: "Пароль: от 6 до 100 символов" });
     }
 
     const existingName = db
@@ -238,17 +406,25 @@ app.post("/api/auth/register", async (req, res) => {
       return res.status(400).json({ error: "Этот номер уже зарегистрирован" });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    const uid = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const passwordHash = await bcrypt.hash(password, 12);
+    const uid = `user_${crypto.randomBytes(12).toString("hex")}`;
+    const isAdmin = isAdminPhone(normPhone) ? 1 : 0;
 
     db.prepare(
-      "INSERT INTO users (uid, username, phone, password_hash, avatar, bio) VALUES (?, ?, ?, ?, '', '')",
-    ).run(uid, username, normPhone, passwordHash);
+      "INSERT INTO users (uid, username, phone, password_hash, avatar, bio, is_admin) VALUES (?, ?, ?, ?, '', '', ?)",
+    ).run(uid, username, normPhone, passwordHash, isAdmin);
 
-    const token = jwt.sign({ uid, username, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign({ uid, username }, JWT_SECRET, { expiresIn: "7d" });
     res.json({
       token,
-      user: { uid, username, phone: normPhone, avatar: "", bio: "" },
+      user: {
+        uid,
+        username,
+        phone: normPhone,
+        avatar: "",
+        bio: "",
+        is_admin: isAdmin,
+      },
     });
   } catch (error) {
     console.error("Register error:", error);
@@ -256,25 +432,39 @@ app.post("/api/auth/register", async (req, res) => {
   }
 });
 
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", authLimiter, async (req, res) => {
   try {
     const { phone, password } = req.body;
     const normPhone = normalizePhone(phone);
 
-    if (!normPhone || !password) {
+    if (!normPhone || !password || typeof password !== "string") {
       return res.status(400).json({ error: "Введите телефон и пароль" });
+    }
+    if (password.length > 100) {
+      return res.status(400).json({ error: "Неверные данные" });
     }
 
     const user = db
       .prepare("SELECT * FROM users WHERE phone = ?")
       .get(normPhone);
-    if (!user) {
-      return res.status(400).json({ error: "Пользователь не найден" });
+
+    // Timing-safe: always run bcrypt to avoid leaking whether user exists
+    const dummyHash =
+      "$2a$12$abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN0pqrs";
+    const hashToCheck = user ? user.password_hash : dummyHash;
+    const validPassword = await bcrypt.compare(password, hashToCheck);
+
+    if (!user || !validPassword) {
+      return res.status(400).json({ error: "Неверный телефон или пароль" });
     }
 
-    const validPassword = await bcrypt.compare(password, user.password_hash);
-    if (!validPassword) {
-      return res.status(400).json({ error: "Неверный пароль" });
+    // Sync admin flag if phone is in ADMIN_PHONES
+    let isAdmin = user.is_admin ? 1 : 0;
+    if (isAdminPhone(user.phone) && !isAdmin) {
+      try {
+        db.prepare("UPDATE users SET is_admin = 1 WHERE uid = ?").run(user.uid);
+        isAdmin = 1;
+      } catch {}
     }
 
     const token = jwt.sign(
@@ -293,6 +483,7 @@ app.post("/api/auth/login", async (req, res) => {
         phone: user.phone,
         avatar: user.avatar,
         bio: user.bio,
+        is_admin: isAdmin,
       },
     });
   } catch (error) {
@@ -385,6 +576,7 @@ app.put("/api/users/profile", authenticateToken, (req, res) => {
 app.post(
   "/api/users/avatar",
   authenticateToken,
+  uploadLimiter,
   upload.single("avatar"),
   (req, res) => {
     try {
@@ -438,6 +630,7 @@ app.get("/api/posts", authenticateToken, (req, res) => {
 app.post(
   "/api/posts",
   authenticateToken,
+  uploadLimiter,
   upload.fields([
     { name: "image", maxCount: 1 },
     { name: "video", maxCount: 1 },
@@ -567,6 +760,7 @@ app.post("/api/posts/:id/like", authenticateToken, (req, res) => {
 app.post(
   "/api/posts/:id/comment",
   authenticateToken,
+  uploadLimiter,
   upload.single("file"),
   (req, res) => {
     try {
@@ -636,13 +830,22 @@ app.delete("/api/posts/:id", authenticateToken, (req, res) => {
       .get(req.params.id);
 
     if (!post) return res.status(404).json({ error: "Post not found" });
-    if (post.author_id !== req.user.uid)
+
+    const me = db
+      .prepare("SELECT is_admin FROM users WHERE uid = ?")
+      .get(req.user.uid);
+    const isAdmin = me?.is_admin === 1;
+
+    if (post.author_id !== req.user.uid && !isAdmin)
       return res.status(403).json({ error: "Not your post" });
 
     db.prepare("DELETE FROM comments WHERE post_id = ?").run(req.params.id);
     db.prepare("DELETE FROM posts WHERE id = ?").run(req.params.id);
 
-    res.json({ success: true });
+    res.json({
+      success: true,
+      deleted_by_admin: isAdmin && post.author_id !== req.user.uid,
+    });
   } catch (error) {
     res.status(500).json({ error: "Server error" });
   }
@@ -815,6 +1018,7 @@ app.get("/api/messages/:conversationId", authenticateToken, (req, res) => {
 app.post(
   "/api/messages/:conversationId",
   authenticateToken,
+  uploadLimiter,
   upload.single("file"),
   (req, res) => {
     try {
@@ -906,6 +1110,28 @@ app.get("/api/friends/requests", authenticateToken, (req, res) => {
   }
 });
 
+app.get("/api/friends/status/:friendId", authenticateToken, (req, res) => {
+  try {
+    const row = db
+      .prepare(
+        `SELECT user_id, status FROM friendships
+         WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)`,
+      )
+      .get(
+        req.user.uid,
+        req.params.friendId,
+        req.params.friendId,
+        req.user.uid,
+      );
+    if (!row) return res.json({ status: "none" });
+    if (row.status === "accepted") return res.json({ status: "friends" });
+    if (row.user_id === req.user.uid) return res.json({ status: "sent" });
+    return res.json({ status: "incoming" });
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 app.post("/api/friends/request", authenticateToken, (req, res) => {
   try {
     const { friendId } = req.body;
@@ -988,6 +1214,7 @@ app.get("/api/stories", authenticateToken, (req, res) => {
 app.post(
   "/api/stories",
   authenticateToken,
+  uploadLimiter,
   upload.single("media"),
   (req, res) => {
     try {
@@ -1007,11 +1234,52 @@ app.post(
         )
         .run(req.user.uid, mediaUrl, mediaType, expiresAt);
 
-      res.json({ success: true, id: result.lastInsertRowid });
+      res.json({
+        success: true,
+        id: result.lastInsertRowid,
+        expires_at: expiresAt,
+      });
     } catch (error) {
       res.status(500).json({ error: "Server error" });
     }
   },
+);
+
+app.delete("/api/stories/:id", authenticateToken, (req, res) => {
+  try {
+    const story = db
+      .prepare("SELECT user_id FROM stories WHERE id = ?")
+      .get(req.params.id);
+    if (!story) return res.status(404).json({ error: "Story not found" });
+
+    const me = db
+      .prepare("SELECT is_admin FROM users WHERE uid = ?")
+      .get(req.user.uid);
+    if (story.user_id !== req.user.uid && me?.is_admin !== 1) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    db.prepare("DELETE FROM stories WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Hourly cleanup of expired stories (in addition to lazy cleanup on read)
+setInterval(
+  () => {
+    try {
+      const result = db
+        .prepare("DELETE FROM stories WHERE expires_at < datetime('now')")
+        .run();
+      if (result.changes > 0) {
+        console.log(`🧹 Removed ${result.changes} expired stories`);
+      }
+    } catch (e) {
+      console.error("Story cleanup error:", e);
+    }
+  },
+  60 * 60 * 1000,
 );
 
 // ============ NOTIFICATION ROUTES ============
@@ -1194,6 +1462,105 @@ app.post("/api/premium/activate", authenticateToken, (req, res) => {
     console.error("Premium activate error:", error);
     res.status(500).json({ error: "Server error" });
   }
+});
+
+// ============ CHALLENGE ROUTES ============
+// User-created exercise prompts that get randomly assigned to others
+app.get("/api/challenges/random", authenticateToken, (req, res) => {
+  try {
+    const ch = db
+      .prepare(
+        `SELECT c.id, c.text, c.emoji, c.author_id, u.username AS author_name
+         FROM challenges c
+         LEFT JOIN users u ON u.uid = c.author_id
+         WHERE c.author_id != ?
+         ORDER BY RANDOM() LIMIT 1`,
+      )
+      .get(req.user.uid);
+    res.json({ challenge: ch || null });
+  } catch (error) {
+    console.error("Random challenge error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.post("/api/challenges", authenticateToken, (req, res) => {
+  try {
+    const { text, emoji } = req.body;
+    const cleanText = String(text || "").trim();
+    if (cleanText.length < 3 || cleanText.length > 200) {
+      return res.status(400).json({ error: "Задание от 3 до 200 символов" });
+    }
+    const cleanEmoji = String(emoji || "💪").slice(0, 8);
+    const result = db
+      .prepare(
+        "INSERT INTO challenges (author_id, text, emoji) VALUES (?, ?, ?)",
+      )
+      .run(req.user.uid, cleanText, cleanEmoji);
+    res.json({
+      id: result.lastInsertRowid,
+      text: cleanText,
+      emoji: cleanEmoji,
+    });
+  } catch (error) {
+    console.error("Create challenge error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.get("/api/challenges/mine", authenticateToken, (req, res) => {
+  try {
+    const list = db
+      .prepare(
+        "SELECT id, text, emoji, created_at FROM challenges WHERE author_id = ? ORDER BY id DESC LIMIT 50",
+      )
+      .all(req.user.uid);
+    res.json(list);
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.delete("/api/challenges/:id", authenticateToken, (req, res) => {
+  try {
+    const ch = db
+      .prepare("SELECT author_id FROM challenges WHERE id = ?")
+      .get(req.params.id);
+    if (!ch) return res.status(404).json({ error: "Not found" });
+    const me = db
+      .prepare("SELECT is_admin FROM users WHERE uid = ?")
+      .get(req.user.uid);
+    if (ch.author_id !== req.user.uid && me?.is_admin !== 1) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    db.prepare("DELETE FROM challenges WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ============ GLOBAL ERROR HANDLERS ============
+// 404 for unknown API routes
+app.use("/api", (req, res) => {
+  res.status(404).json({ error: "Not found" });
+});
+
+// Multer & generic error handler — never leak stack traces to clients
+app.use((err, req, res, next) => {
+  if (err && err.name === "MulterError") {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res
+        .status(413)
+        .json({ error: "Файл слишком большой (макс 50 МБ)" });
+    }
+    return res.status(400).json({ error: "Ошибка загрузки файла" });
+  }
+  if (err && err.message === "Недопустимый тип файла") {
+    return res.status(415).json({ error: err.message });
+  }
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: "Server error" });
 });
 
 // Start server
