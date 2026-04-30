@@ -245,7 +245,7 @@ app.post("/api/auth/register", async (req, res) => {
       "INSERT INTO users (uid, username, phone, password_hash, avatar, bio) VALUES (?, ?, ?, ?, '', '')",
     ).run(uid, username, normPhone, passwordHash);
 
-    const token = jwt.sign({ uid, username }, JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign({ uid, username, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
     res.json({
       token,
       user: { uid, username, phone: normPhone, avatar: "", bio: "" },
