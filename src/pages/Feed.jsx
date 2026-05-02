@@ -1082,15 +1082,15 @@ const Post = ({
       )}
       {/* Media — ИСПРАВЛЕНО: object-contain вместо object-cover */}
       {post.image && (
-        <div className="w-full bg-gray-50">
-          <img
-            src={post.image}
-            alt="Post"
-            loading="lazy"
-            className="w-full h-auto max-h-[600px] object-contain"
-          />
-        </div>
-      )}
+  <div className="w-full bg-gray-50">
+    <img
+      src={post.image}
+      alt="Post"
+      loading="lazy"
+      className="w-full h-auto max-h-[600px] object-contain"
+    />
+  </div>
+)}
       {post.video && (
         <AutoVideo src={post.video} className="w-full max-h-[600px] bg-black" />
       )}
