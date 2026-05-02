@@ -36,12 +36,20 @@ export default function Search() {
     return () => clearTimeout(timer);
   }, [query, search]);
 
+  // Исправление: Добавлена проверка и предотвращение лишних кликов
   const handleAddFriend = async (uid) => {
+    // Если уже отправлена, ничего не делаем
+    if (sentRequests[uid]) return;
+    
     try {
+      // Отправляем запрос
       await friendService.sendRequest(uid);
+      // Обновляем состояние, чтобы кнопка стала зеленой
       setSentRequests((prev) => ({ ...prev, [uid]: true }));
     } catch (err) {
       console.error(err);
+      // Если ошибка (например, уже друзья), все равно помечаем как "отправлено", чтобы кнопка не висела
+      setSentRequests((prev) => ({ ...prev, [uid]: true }));
     }
   };
 
@@ -92,6 +100,7 @@ export default function Search() {
             >
               {/* Avatar — clickable */}
               <button
+                type="button"
                 onClick={() => navigate(`/profile/${u.uid}`)}
                 className="flex-shrink-0"
               >
@@ -112,6 +121,7 @@ export default function Search() {
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <button
+                  type="button"
                   onClick={() => navigate(`/profile/${u.uid}`)}
                   className="font-bold text-gray-800 hover:text-purple-600 transition-colors text-left"
                 >
@@ -125,9 +135,10 @@ export default function Search() {
               {/* Action buttons */}
               <div className="flex flex-col gap-2 flex-shrink-0">
                 <button
+                  type="button"
                   onClick={() => handleAddFriend(u.uid)}
                   disabled={sentRequests[u.uid]}
-                  className={`text-xs px-3 py-1.5 rounded-full font-semibold transition-all ${
+                  className={`text-xs px-3 py-1.5 rounded-full font-semibold transition-all cursor-pointer ${
                     sentRequests[u.uid]
                       ? "bg-green-100 text-green-600"
                       : "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:shadow"
@@ -136,9 +147,10 @@ export default function Search() {
                   {sentRequests[u.uid] ? "✓ Отправлено" : "👤 Добавить"}
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleMessage(u.uid)}
                   disabled={startingChat[u.uid]}
-                  className="text-xs px-3 py-1.5 rounded-full bg-white border border-purple-300 text-purple-600 font-semibold hover:bg-purple-50 transition-all"
+                  className="text-xs px-3 py-1.5 rounded-full bg-white border border-purple-300 text-purple-600 font-semibold hover:bg-purple-50 transition-all cursor-pointer"
                 >
                   {startingChat[u.uid] ? "..." : "💬 Написать"}
                 </button>

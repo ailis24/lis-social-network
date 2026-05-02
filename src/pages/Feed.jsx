@@ -35,7 +35,6 @@ const AutoVideo = ({ src, className = "" }) => {
     obs.observe(v);
     return () => obs.disconnect();
   }, []);
-
   return (
     <video
       ref={ref}
@@ -55,7 +54,6 @@ const PremiumModal = ({ onClose, onActivated }) => {
   const [phone, setPhone] = useState(PAYMENT_PHONE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
   const handlePay = async () => {
     setLoading(true);
     setError("");
@@ -68,7 +66,6 @@ const PremiumModal = ({ onClose, onActivated }) => {
       setLoading(false);
     }
   };
-
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl">
@@ -118,18 +115,15 @@ const PremiumModal = ({ onClose, onActivated }) => {
 
 // ─── Story Recorder (15-second video) ─────────────────────────────────────────
 const STORY_MAX_SECONDS = 15;
-
 const StoryRecorder = ({ onClose, onUploaded }) => {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
   const stopTimerRef = useRef(null);
-
   const [phase, setPhase] = useState("preview"); // preview | recording | uploading | error
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState("");
-
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -166,14 +160,12 @@ const StoryRecorder = ({ onClose, onUploaded }) => {
       }
     };
   }, []);
-
   // Tick during recording
   useEffect(() => {
     if (phase !== "recording") return;
     const iv = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => clearInterval(iv);
   }, [phase]);
-
   const startRecording = () => {
     setError("");
     const stream = streamRef.current;
@@ -201,14 +193,12 @@ const StoryRecorder = ({ onClose, onUploaded }) => {
       if (recorder.state !== "inactive") recorder.stop();
     }, STORY_MAX_SECONDS * 1000);
   };
-
   const stopRecording = () => {
     if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
     if (recorderRef.current && recorderRef.current.state !== "inactive") {
       recorderRef.current.stop();
     }
   };
-
   const doUpload = async (mimeType) => {
     setPhase("uploading");
     try {
@@ -225,10 +215,8 @@ const StoryRecorder = ({ onClose, onUploaded }) => {
       setPhase("error");
     }
   };
-
   const remaining = STORY_MAX_SECONDS - seconds;
   const progress = (seconds / STORY_MAX_SECONDS) * 100;
-
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
       <div className="flex items-center justify-between p-4 text-white">
@@ -237,7 +225,6 @@ const StoryRecorder = ({ onClose, onUploaded }) => {
           ✕
         </button>
       </div>
-
       <div className="flex-1 flex items-center justify-center bg-black relative">
         <video
           ref={videoRef}
@@ -253,7 +240,6 @@ const StoryRecorder = ({ onClose, onUploaded }) => {
           </div>
         )}
       </div>
-
       {/* Progress bar */}
       {phase === "recording" && (
         <div className="h-1 bg-white/20">
@@ -263,7 +249,6 @@ const StoryRecorder = ({ onClose, onUploaded }) => {
           />
         </div>
       )}
-
       <div className="p-4 flex justify-center bg-black">
         {phase === "preview" && (
           <button
@@ -305,18 +290,15 @@ const StoriesBar = ({ currentUser }) => {
   const [showChooser, setShowChooser] = useState(false);
   const [now, setNow] = useState(Date.now());
   const fileRef = useRef();
-
   const loadStories = () => {
     storyService
       .getStories()
       .then(setStories)
       .catch(() => {});
   };
-
   useEffect(() => {
     loadStories();
   }, []);
-
   // Tick every minute so the "expires in" labels and auto-removal stay current
   useEffect(() => {
     const iv = setInterval(() => {
@@ -328,7 +310,6 @@ const StoriesBar = ({ currentUser }) => {
     }, 60 * 1000);
     return () => clearInterval(iv);
   }, []);
-
   const handleUpload = async (e) => {
     const file = e.target.files[0];
     e.target.value = "";
@@ -351,7 +332,6 @@ const StoriesBar = ({ currentUser }) => {
       alert("Ошибка загрузки сторис");
     }
   };
-
   const handleStoryDelete = async (id) => {
     if (!confirm("Удалить сторис?")) return;
     try {
@@ -370,7 +350,6 @@ const StoriesBar = ({ currentUser }) => {
       alert("Не удалось удалить");
     }
   };
-
   // group by user
   const grouped = {};
   stories.forEach((s) => {
@@ -378,7 +357,6 @@ const StoriesBar = ({ currentUser }) => {
     grouped[s.user_id].items.push(s);
   });
   const groups = Object.values(grouped);
-
   const formatRemaining = (expiresAt) => {
     const diff = new Date(expiresAt).getTime() - now;
     if (diff <= 0) return "истекает";
@@ -387,14 +365,11 @@ const StoriesBar = ({ currentUser }) => {
     if (h > 0) return `${h}ч ${m}м`;
     return `${m}м`;
   };
-
   const openViewer = (group) => {
     setViewing(group);
     setActiveIdx(0);
   };
-
   const currentItem = viewing?.items?.[activeIdx];
-
   return (
     <div className="bg-white/90 backdrop-blur rounded-2xl shadow mb-4 p-3">
       <div className="flex gap-3 overflow-x-auto scrollbar-hide">
@@ -415,7 +390,6 @@ const StoriesBar = ({ currentUser }) => {
           className="hidden"
           onChange={handleUpload}
         />
-
         {/* Stories */}
         {groups.map((group) => (
           <button
@@ -437,7 +411,6 @@ const StoriesBar = ({ currentUser }) => {
           </button>
         ))}
       </div>
-
       {/* Source chooser */}
       {showChooser && (
         <div
@@ -475,7 +448,6 @@ const StoriesBar = ({ currentUser }) => {
           </div>
         </div>
       )}
-
       {/* Recorder */}
       {showRecorder && (
         <StoryRecorder
@@ -483,7 +455,6 @@ const StoriesBar = ({ currentUser }) => {
           onUploaded={loadStories}
         />
       )}
-
       {/* Story viewer modal */}
       {viewing && currentItem && (
         <div
@@ -548,7 +519,6 @@ const StoriesBar = ({ currentUser }) => {
                 loading="lazy"
               />
             )}
-
             {/* Nav + delete */}
             <div className="flex justify-between items-center mt-3">
               <button
@@ -622,11 +592,10 @@ const ExerciseModal = ({ onDone }) => {
     { emoji: "🚶", name: "Встань и пройдись 2 минуты", author_name: null },
     { emoji: "🤸", name: "10 приседаний", author_name: null },
   ];
-
   const [ex, setEx] = useState(
-    () => builtInExercises[Math.floor(Math.random() * builtInExercises.length)],
+    () =>
+      builtInExercises[Math.floor(Math.random() * builtInExercises.length)],
   );
-
   // Try fetch a user-created challenge; mix it into rotation (~50% chance)
   useEffect(() => {
     let alive = true;
@@ -647,23 +616,19 @@ const ExerciseModal = ({ onDone }) => {
       alive = false;
     };
   }, []);
-
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
-
   const [phase, setPhase] = useState("idle"); // idle | recording | uploading | error
   const [error, setError] = useState("");
   const [seconds, setSeconds] = useState(0);
-
   // Tick seconds while recording
   useEffect(() => {
     if (phase !== "recording") return;
     const iv = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => clearInterval(iv);
   }, [phase]);
-
   // Cleanup stream on unmount
   useEffect(() => {
     return () => {
@@ -672,7 +637,6 @@ const ExerciseModal = ({ onDone }) => {
       }
     };
   }, []);
-
   const startRecording = async () => {
     setError("");
     try {
@@ -709,7 +673,6 @@ const ExerciseModal = ({ onDone }) => {
       setPhase("error");
     }
   };
-
   // Attach the stream to the video element once it appears in the DOM
   useEffect(() => {
     if (phase !== "recording") return;
@@ -728,7 +691,6 @@ const ExerciseModal = ({ onDone }) => {
       video.removeEventListener("loadedmetadata", tryPlay);
     };
   }, [phase]);
-
   const handleStop = async (mimeType) => {
     setPhase("uploading");
     try {
@@ -756,13 +718,11 @@ const ExerciseModal = ({ onDone }) => {
       setPhase("error");
     }
   };
-
   const stopRecording = () => {
     if (recorderRef.current && recorderRef.current.state !== "inactive") {
       recorderRef.current.stop();
     }
   };
-
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl p-6 max-w-md w-full text-center shadow-2xl">
@@ -777,7 +737,6 @@ const ExerciseModal = ({ onDone }) => {
           </p>
         )}
         {!ex.author_name && <div className="mb-3" />}
-
         {phase === "idle" && (
           <>
             <p className="text-sm text-gray-500 mb-4">
@@ -792,7 +751,6 @@ const ExerciseModal = ({ onDone }) => {
             </button>
           </>
         )}
-
         {(phase === "recording" || phase === "uploading") && (
           <>
             <div className="relative mb-4 rounded-2xl overflow-hidden bg-black">
@@ -825,7 +783,6 @@ const ExerciseModal = ({ onDone }) => {
             )}
           </>
         )}
-
         {phase === "error" && (
           <>
             <p className="text-red-500 text-sm bg-red-50 p-3 rounded-xl mb-4">
@@ -854,25 +811,22 @@ const ExerciseModal = ({ onDone }) => {
 
 // ─── Create Challenge Modal ────────────────────────────────────────────────────
 const CreateChallengeModal = ({ onClose }) => {
-  const EMOJIS = ["💪", "🏃", "🤸", "🧘", "🚶", "🕺", "💃", "🤾", "🦵", "🙌"];
+  const EMOJIS = ["💪", "🏃", "🤸", "🧘", "", "🕺", "💃", "🤾", "🦵", ""];
   const [text, setText] = useState("");
   const [emoji, setEmoji] = useState("💪");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [mine, setMine] = useState([]);
   const [success, setSuccess] = useState(false);
-
   const loadMine = () => {
     challengeService
       .getMine()
       .then(setMine)
       .catch(() => {});
   };
-
   useEffect(() => {
     loadMine();
   }, []);
-
   const submit = async () => {
     setError("");
     if (text.trim().length < 3) {
@@ -892,14 +846,12 @@ const CreateChallengeModal = ({ onClose }) => {
       setBusy(false);
     }
   };
-
   const removeOne = async (id) => {
     try {
       await challengeService.delete(id);
       setMine((arr) => arr.filter((c) => c.id !== id));
     } catch {}
   };
-
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -918,7 +870,6 @@ const CreateChallengeModal = ({ onClose }) => {
           Придумай задание — оно случайно выпадет другим пользователям, когда у
           них закончится таймер ленты.
         </p>
-
         <div className="flex gap-2 mb-2">
           <select
             value={emoji}
@@ -940,7 +891,6 @@ const CreateChallengeModal = ({ onClose }) => {
             className="flex-1 px-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:border-purple-400"
           />
         </div>
-
         {error && (
           <p className="text-red-500 text-sm bg-red-50 p-2 rounded-lg mb-2">
             {error}
@@ -951,7 +901,6 @@ const CreateChallengeModal = ({ onClose }) => {
             ✅ Задание добавлено
           </p>
         )}
-
         <button
           onClick={submit}
           disabled={busy}
@@ -959,7 +908,6 @@ const CreateChallengeModal = ({ onClose }) => {
         >
           {busy ? "..." : "Добавить"}
         </button>
-
         {mine.length > 0 && (
           <div className="mt-5">
             <h3 className="text-sm font-semibold text-gray-700 mb-2">
@@ -993,7 +941,6 @@ const CreateChallengeModal = ({ onClose }) => {
 // ─── Feed Locked Screen ────────────────────────────────────────────────────────
 const FeedLocked = ({ lockUntil, onUnlock }) => {
   const [remaining, setRemaining] = useState(0);
-
   useEffect(() => {
     const update = () => {
       const diff = Math.max(
@@ -1007,10 +954,8 @@ const FeedLocked = ({ lockUntil, onUnlock }) => {
     const iv = setInterval(update, 1000);
     return () => clearInterval(iv);
   }, [lockUntil, onUnlock]);
-
   const m = Math.floor(remaining / 60);
   const s = remaining % 60;
-
   return (
     <div className="flex flex-col items-center justify-center py-20 text-white text-center">
       <div className="text-6xl mb-4">🔒</div>
@@ -1040,7 +985,6 @@ const Post = ({
   const [showStickers, setShowStickers] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const liked = post.likes?.includes(currentUser?.uid);
-
   // Normalize poll options (string or {text, votes})
   const pollOptions = post.poll_data?.options?.map((o) =>
     typeof o === "string" ? { text: o, votes: 0 } : o,
@@ -1049,7 +993,6 @@ const Post = ({
     pollOptions?.reduce((sum, o) => sum + (o.votes || 0), 0) || 0;
   const userVoted = post.poll_data?.voters?.[currentUser?.uid] !== undefined;
   const myVote = post.poll_data?.voters?.[currentUser?.uid];
-
   const loadComments = useCallback(async () => {
     setLoadingComments(true);
     try {
@@ -1061,13 +1004,11 @@ const Post = ({
       setLoadingComments(false);
     }
   }, [post.id]);
-
   const toggleComments = () => {
     const next = !showComments;
     setShowComments(next);
     if (next && comments.length === 0) loadComments();
   };
-
   const submitComment = async () => {
     if (!newComment.trim() && !commentFile) return;
     await onAddComment(post.id, newComment, commentFile);
@@ -1076,12 +1017,10 @@ const Post = ({
     setShowStickers(false);
     loadComments();
   };
-
   const insertSticker = (s) => {
     setNewComment((prev) => prev + s);
     setShowStickers(false);
   };
-
   return (
     <div className="bg-white/95 backdrop-blur rounded-2xl shadow-md mb-4 overflow-hidden">
       {/* Header */}
@@ -1135,27 +1074,26 @@ const Post = ({
           </button>
         )}
       </div>
-
       {/* Content */}
       {post.content && (
         <p className="px-4 pb-3 text-gray-800 whitespace-pre-wrap">
           {post.content}
         </p>
       )}
-
-      {/* Media */}
+      {/* Media — ИСПРАВЛЕНО: object-contain вместо object-cover */}
       {post.image && (
-        <img
-          src={post.image}
-          alt="Post"
-          loading="lazy"
-          className="w-full max-h-96 object-cover"
-        />
+        <div className="w-full bg-gray-50">
+          <img
+            src={post.image}
+            alt="Post"
+            loading="lazy"
+            className="w-full h-auto max-h-[600px] object-contain"
+          />
+        </div>
       )}
       {post.video && (
-        <AutoVideo src={post.video} className="w-full max-h-96 bg-black" />
+        <AutoVideo src={post.video} className="w-full max-h-[600px] bg-black" />
       )}
-
       {/* Poll */}
       {post.poll_data && pollOptions && (
         <div className="px-4 pb-3">
@@ -1205,7 +1143,6 @@ const Post = ({
           )}
         </div>
       )}
-
       {/* Actions */}
       <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-6">
         <button
@@ -1226,7 +1163,6 @@ const Post = ({
           💬 <span>{post.comments_count}</span>
         </button>
       </div>
-
       {/* Comments */}
       {showComments && (
         <div className="px-4 pb-4 border-t border-gray-100">
@@ -1281,13 +1217,11 @@ const Post = ({
               </button>
             </div>
           )}
-
           {loadingComments && (
             <p className="text-center text-gray-400 text-sm mt-3">
               Загрузка...
             </p>
           )}
-
           <div className="mt-3 space-y-3">
             {comments.map((c) => (
               <div key={c.id} className="flex gap-2 items-start">
@@ -1360,7 +1294,6 @@ const CreatePost = ({ currentUser, onCreated }) => {
   const [pollOpts, setPollOpts] = useState(["", ""]);
   const [loading, setLoading] = useState(false);
   const textareaRef = useRef(null);
-
   useEffect(() => {
     const handler = () => {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1369,15 +1302,13 @@ const CreatePost = ({ currentUser, onCreated }) => {
     window.addEventListener("lis:create-post", handler);
     return () => window.removeEventListener("lis:create-post", handler);
   }, []);
-
   const fileKind = file
     ? file.type.startsWith("image/")
       ? "image"
       : file.type.startsWith("video/")
-        ? "video"
-        : "file"
+      ? "video"
+      : "file"
     : null;
-
   const submit = async (e) => {
     e.preventDefault();
     const validPoll =
@@ -1408,7 +1339,6 @@ const CreatePost = ({ currentUser, onCreated }) => {
       setLoading(false);
     }
   };
-
   return (
     <div className="bg-white/95 rounded-2xl shadow-md p-4 mb-4">
       <div className="flex gap-3 items-start">
@@ -1433,15 +1363,14 @@ const CreatePost = ({ currentUser, onCreated }) => {
             value={content}
             onChange={(e) => setContent(e.target.value)}
           />
-
           {file && (
             <div className="mt-2 flex items-center gap-2 text-sm text-purple-600 bg-purple-50 rounded-lg px-3 py-2">
               <span>
                 {fileKind === "image"
                   ? "📷"
                   : fileKind === "video"
-                    ? "🎥"
-                    : "📎"}{" "}
+                  ? "🎥"
+                  : "📎"}{" "}
                 {file.name}
               </span>
               <button
@@ -1453,7 +1382,6 @@ const CreatePost = ({ currentUser, onCreated }) => {
               </button>
             </div>
           )}
-
           {showPoll && (
             <div className="mt-3 bg-purple-50 rounded-xl p-3 space-y-2">
               <div className="flex items-center justify-between">
@@ -1514,7 +1442,6 @@ const CreatePost = ({ currentUser, onCreated }) => {
               )}
             </div>
           )}
-
           <div className="flex items-center justify-between mt-3">
             <div className="flex gap-3 items-center">
               <label
@@ -1579,25 +1506,20 @@ const CreatePost = ({ currentUser, onCreated }) => {
 export default function Feed() {
   const { user } = useAuth();
   const navigate = useNavigate();
-
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-
   // Timer state
   const [elapsed, setElapsed] = useState(0);
   const [showTimerModal, setShowTimerModal] = useState(false);
   const [showExercise, setShowExercise] = useState(false);
   const [locked, setLocked] = useState(false);
   const [lockUntil, setLockUntil] = useState(null);
-
   // Premium state
   const [premium, setPremium] = useState(false);
   const [premiumUntil, setPremiumUntil] = useState(null);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
-
   // Challenge creation modal
   const [showChallengeModal, setShowChallengeModal] = useState(false);
-
   useEffect(() => {
     premiumService
       .getStatus()
@@ -1607,7 +1529,6 @@ export default function Feed() {
       })
       .catch(() => {});
   }, []);
-
   const handlePremiumActivated = () => {
     setShowPremiumModal(false);
     setLocked(false);
@@ -1618,7 +1539,6 @@ export default function Feed() {
       setPremiumUntil(d.premiumUntil || null);
     });
   };
-
   const loadFeed = useCallback(async () => {
     try {
       const data = await postService.getFeed();
@@ -1629,11 +1549,9 @@ export default function Feed() {
       setLoading(false);
     }
   }, []);
-
   useEffect(() => {
     loadFeed();
   }, [loadFeed]);
-
   // Check server timer status on mount
   useEffect(() => {
     timerService
@@ -1648,7 +1566,6 @@ export default function Feed() {
       })
       .catch(() => {});
   }, []);
-
   // Client-side timer tick (premium users skip)
   useEffect(() => {
     if (premium || locked || showTimerModal || showExercise) return;
@@ -1664,12 +1581,10 @@ export default function Feed() {
     }, 1000);
     return () => clearInterval(iv);
   }, [locked, showTimerModal, showExercise]);
-
   const handleExercise = () => {
     setShowTimerModal(false);
     setShowExercise(true);
   };
-
   const handleBreak = async () => {
     try {
       const data = await timerService.lock();
@@ -1681,7 +1596,6 @@ export default function Feed() {
     setShowTimerModal(false);
     setLocked(true);
   };
-
   const handleExerciseDone = async () => {
     setShowExercise(false);
     setElapsed(0);
@@ -1691,13 +1605,11 @@ export default function Feed() {
     // Reload feed so the freshly published workout video appears at the top
     loadFeed();
   };
-
   const handleUnlock = () => {
     setLocked(false);
     setLockUntil(null);
     setElapsed(0);
   };
-
   const handleLike = async (postId) => {
     try {
       const result = await postService.toggleLike(postId);
@@ -1708,7 +1620,6 @@ export default function Feed() {
       console.error(err);
     }
   };
-
   const handleAddComment = async (postId, text, file) => {
     try {
       await postService.addComment(postId, text, file);
@@ -1721,7 +1632,6 @@ export default function Feed() {
       console.error(err);
     }
   };
-
   const handleDeletePost = async (postId) => {
     try {
       await postService.deletePost(postId);
@@ -1731,7 +1641,6 @@ export default function Feed() {
       alert("Не удалось удалить пост");
     }
   };
-
   const handleVote = async (postId, optionIndex) => {
     try {
       const data = await postService.votePoll(postId, optionIndex);
@@ -1743,12 +1652,10 @@ export default function Feed() {
       console.error(err);
     }
   };
-
   // Timer bar display
   const timerPercent = Math.min((elapsed / TIMER_LIMIT) * 100, 100);
   const timerMins = Math.floor(elapsed / 60);
   const timerSecs = elapsed % 60;
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -1756,7 +1663,6 @@ export default function Feed() {
       </div>
     );
   }
-
   return (
     <div className="max-w-2xl mx-auto px-4 py-4 pb-24">
       {/* Premium banner / Timer progress bar */}
@@ -1808,7 +1714,6 @@ export default function Feed() {
           </div>
         )
       )}
-
       {/* Modals */}
       {showTimerModal && (
         <FeedTimerModal onExercise={handleExercise} onBreak={handleBreak} />
@@ -1823,14 +1728,12 @@ export default function Feed() {
       {showChallengeModal && (
         <CreateChallengeModal onClose={() => setShowChallengeModal(false)} />
       )}
-
       {locked ? (
         <FeedLocked lockUntil={lockUntil} onUnlock={handleUnlock} />
       ) : (
         <>
           <StoriesBar currentUser={user} />
           <CreatePost currentUser={user} onCreated={loadFeed} />
-
           {posts.length === 0 ? (
             <div className="text-center py-16 text-white">
               <div className="text-5xl mb-3">🦊</div>

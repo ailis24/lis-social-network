@@ -1,15 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Parisienne&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 }
-
 body {
   margin: 0;
   min-width: 320px;
@@ -18,7 +15,7 @@ body {
   color: #1f2937;
 }
 
-/* ✅ Изображения */
+/* ✅ Исправление фото в ленте */
 img {
   max-width: 100%;
   height: auto;
@@ -27,27 +24,25 @@ img {
 
 .post-image {
   width: 100%;
-  max-height: 400px;
-  object-fit: cover;
+  max-height: 600px; /* Увеличили высоту */
+  object-fit: contain; /* Фото теперь влезает полностью, без обрезки */
   border-radius: 0.75rem;
   margin-bottom: 1rem;
+  background: #f0f2f5; /* Фон для пустого места */
 }
 
 .avatar {
   border-radius: 9999px;
   object-fit: cover;
 }
-
 .avatar-sm {
   width: 32px;
   height: 32px;
 }
-
 .avatar-md {
   width: 48px;
   height: 48px;
 }
-
 .avatar-lg {
   width: 80px;
   height: 80px;
@@ -55,110 +50,63 @@ img {
 
 /* ✅ Анимации */
 @keyframes bounce-short {
-
-  0%,
-  100% {
-    transform: scale(1);
-  }
-
-  50% {
-    transform: scale(1.2);
-  }
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
 }
-
 .animate-bounce-short {
   animation: bounce-short 0.3s ease-in-out;
 }
-
 @keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-
 .message-bubble {
   animation: slideIn 0.2s ease-out;
 }
-
 @keyframes pulse-soft {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.7;
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
-
 .animate-pulse-soft {
   animation: pulse-soft 1.5s ease-in-out infinite;
 }
-
 @keyframes pulse-green {
-
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
-  }
-
-  50% {
-    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
-  }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
 }
-
 .online-pulse {
   animation: pulse-green 2s infinite;
 }
-
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
-
 .animate-fade-in {
   animation: fadeIn 0.3s ease-out;
 }
 
-/* ✅ Кастомный скроллбар */
+/* ✅ Скроллбар */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
-
 ::-webkit-scrollbar-track {
   background: rgba(147, 51, 234, 0.1);
   border-radius: 3px;
 }
-
 ::-webkit-scrollbar-thumb {
   background: rgba(147, 51, 234, 0.4);
   border-radius: 3px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(147, 51, 234, 0.7);
 }
 
-/* ✅ СТРАНИЦА СООБЩЕНИЙ (/messages) */
+/* ✅ Сообщения */
 .messages-page {
   background: linear-gradient(to bottom, #9333ea, #c084fc, #f3e8ff);
   min-height: 100vh;
 }
-
-/* Шапка списка чатов — градиент, без поиска */
 .messages-header {
   background: linear-gradient(to bottom, #9333ea, #c084fc);
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
@@ -166,15 +114,12 @@ img {
   top: 0;
   z-index: 10;
 }
-
 .messages-header-content {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1rem;
 }
-
-/* Логотип Lis */
 .lis-logo {
   font-family: 'Parisienne', 'Brush Script MT', cursive;
   font-size: 2.5rem;
@@ -187,8 +132,6 @@ img {
   letter-spacing: 2px;
   cursor: pointer;
 }
-
-/* Элемент чата в списке */
 .chat-list-item {
   display: flex;
   align-items: center;
@@ -202,18 +145,15 @@ img {
   margin-bottom: 0.5rem;
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
-
 .chat-list-item:hover {
   background: rgba(255, 255, 255, 1);
   transform: translateX(4px);
   box-shadow: 0 4px 12px rgba(147, 51, 234, 0.2);
 }
-
 .chat-list-item-avatar {
   position: relative;
   flex-shrink: 0;
 }
-
 .chat-list-item-avatar img {
   width: 48px;
   height: 48px;
@@ -221,7 +161,6 @@ img {
   object-fit: cover;
   border: 2px solid rgba(255, 255, 255, 0.5);
 }
-
 .chat-list-item-online {
   position: absolute;
   bottom: 2px;
@@ -232,12 +171,10 @@ img {
   border-radius: 9999px;
   border: 2px solid white;
 }
-
 .chat-list-item-info {
   flex: 1;
   min-width: 0;
 }
-
 .chat-list-item-name {
   font-weight: 600;
   color: #1f2937;
@@ -246,7 +183,6 @@ img {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .chat-list-item-preview {
   color: #6b7280;
   font-size: 0.85rem;
@@ -255,25 +191,20 @@ img {
   text-overflow: ellipsis;
   margin-top: 0.25rem;
 }
-
 .chat-list-item-meta {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-top: 0.25rem;
 }
-
 .chat-list-item-time {
   color: #9ca3af;
   font-size: 0.75rem;
 }
-
 .chat-list-item-participants {
   color: #8b5cf6;
   font-size: 0.75rem;
 }
-
-/* Заголовки секций */
 .section-title {
   font-size: 1.125rem;
   font-weight: 700;
@@ -283,34 +214,28 @@ img {
   align-items: center;
   gap: 0.5rem;
 }
-
-/* Пустое состояние */
 .empty-state {
   text-align: center;
   padding: 2rem 1rem;
   color: rgba(255, 255, 255, 0.9);
 }
-
 .empty-state-title {
   font-size: 1.125rem;
   font-weight: 600;
   margin-bottom: 0.5rem;
 }
-
 .empty-state-text {
   font-size: 0.875rem;
   color: rgba(255, 255, 255, 0.7);
 }
 
-/* ✅ СТРАНИЦА ГРУППОВОГО ЧАТА (/messages/group/:id) */
+/* ✅ Групповой чат */
 .group-chat-page {
   background: linear-gradient(to bottom, #9333ea, #c084fc, #f3e8ff);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
-
-/* Шапка группового чата — градиент */
 .group-chat-header {
   background: linear-gradient(to bottom, #9333ea, #c084fc);
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
@@ -318,30 +243,25 @@ img {
   top: 0;
   z-index: 10;
 }
-
 .group-chat-header-content {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
 }
-
 .group-chat-header-back {
   padding: 0.5rem;
   border-radius: 9999px;
   transition: background-color 0.2s;
   cursor: pointer;
 }
-
 .group-chat-header-back:hover {
   background: rgba(255, 255, 255, 0.2);
 }
-
 .group-chat-header-back span {
   font-size: 1.5rem;
   color: white;
 }
-
 .group-chat-header-avatar {
   width: 48px;
   height: 48px;
@@ -356,28 +276,23 @@ img {
   cursor: pointer;
   overflow: hidden;
 }
-
 .group-chat-header-avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-
 .group-chat-header-info {
   flex: 1;
 }
-
 .group-chat-header-name {
   font-weight: 700;
   color: white;
   font-size: 1.125rem;
 }
-
 .group-chat-header-participants {
   color: rgba(255, 255, 255, 0.8);
   font-size: 0.875rem;
 }
-
 .group-chat-header-add {
   padding: 0.5rem;
   border-radius: 9999px;
@@ -387,12 +302,9 @@ img {
   cursor: pointer;
   transition: background-color 0.2s;
 }
-
 .group-chat-header-add:hover {
   background: rgba(255, 255, 255, 0.3);
 }
-
-/* Область сообщений */
 .group-chat-messages {
   flex: 1;
   padding: 1rem;
@@ -402,50 +314,38 @@ img {
   overflow-y: auto;
   min-height: 60vh;
 }
-
-/* Пузырь сообщения */
 .group-message {
   display: flex;
   max-width: 75%;
   animation: slideIn 0.2s ease-out;
 }
-
 .group-message.own {
   margin-left: auto;
 }
-
 .group-message.other {
   margin-right: auto;
 }
-
 .group-message.system {
   justify-content: center;
   max-width: 100%;
 }
-
 .group-message-bubble {
   padding: 0.75rem 1rem;
   border-radius: 1.25rem;
   word-wrap: break-word;
 }
-
-/* Мои сообщения — фиолетово-розовый градиент */
 .group-message.own .group-message-bubble {
   background: linear-gradient(135deg, #8b5cf6, #ec4899);
   color: white;
   border-bottom-right-radius: 0.5rem;
   box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
 }
-
-/* Чужие сообщения — белый фон */
 .group-message.other .group-message-bubble {
   background: rgba(255, 255, 255, 0.95);
   color: #1f2937;
   border-bottom-left-radius: 0.5rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
-
-/* Системные сообщения */
 .group-message.system .group-message-bubble {
   background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(8px);
@@ -454,37 +354,30 @@ img {
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
 }
-
 .group-message-author {
   font-size: 0.75rem;
   font-weight: 600;
   color: #8b5cf6;
   margin-bottom: 0.25rem;
 }
-
 .group-message.own .group-message-author {
   color: rgba(255, 255, 255, 0.9);
 }
-
 .group-message-text {
   font-size: 0.95rem;
   line-height: 1.4;
   white-space: pre-wrap;
 }
-
 .group-message-text a {
   color: #c4b5fd;
   text-decoration: underline;
 }
-
 .group-message.own .group-message-text a {
   color: #f5d0fe;
 }
-
 .group-message-file {
   margin-bottom: 0.5rem;
 }
-
 .group-message-file img {
   max-width: 100%;
   max-height: 300px;
@@ -492,17 +385,14 @@ img {
   cursor: pointer;
   transition: opacity 0.2s;
 }
-
 .group-message-file img:hover {
   opacity: 0.9;
 }
-
 .group-message-file video {
   max-width: 100%;
   max-height: 300px;
   border-radius: 0.75rem;
 }
-
 .group-message-file-link {
   display: flex;
   align-items: center;
@@ -513,25 +403,20 @@ img {
   text-decoration: none;
   transition: background-color 0.2s;
 }
-
 .group-message.own .group-message-file-link {
   background: rgba(255, 255, 255, 0.15);
   color: inherit;
 }
-
 .group-message.other .group-message-file-link {
   background: rgba(147, 51, 234, 0.1);
   color: #1f2937;
 }
-
 .group-message-time {
   font-size: 0.7rem;
   margin-top: 0.35rem;
   text-align: right;
   opacity: 0.8;
 }
-
-/* Поле ввода */
 .group-chat-input {
   position: fixed;
   bottom: 5rem;
@@ -543,7 +428,6 @@ img {
   padding: 0.75rem 1rem;
   z-index: 20;
 }
-
 .group-chat-input-wrapper {
   display: flex;
   align-items: center;
@@ -551,7 +435,6 @@ img {
   max-width: 768px;
   margin: 0 auto;
 }
-
 .group-chat-input-file {
   padding: 0.5rem;
   border-radius: 9999px;
@@ -560,12 +443,10 @@ img {
   font-size: 1.25rem;
   color: #6b7280;
 }
-
 .group-chat-input-file:hover {
   background: rgba(147, 51, 234, 0.1);
   color: #8b5cf6;
 }
-
 .group-chat-input-text {
   flex: 1;
   padding: 0.75rem 1.25rem;
@@ -577,15 +458,12 @@ img {
   outline: none;
   transition: border-color 0.2s;
 }
-
 .group-chat-input-text:focus {
   border-color: #8b5cf6;
 }
-
 .group-chat-input-text::placeholder {
   color: #9ca3af;
 }
-
 .group-chat-input-send {
   padding: 0.75rem 1.25rem;
   background: linear-gradient(135deg, #8b5cf6, #ec4899);
@@ -596,18 +474,15 @@ img {
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
 }
-
 .group-chat-input-send:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(147, 51, 234, 0.4);
 }
-
 .group-chat-input-send:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
 }
-
 .group-chat-input-hint {
   text-align: center;
   font-size: 0.75rem;
@@ -615,7 +490,7 @@ img {
   margin-top: 0.5rem;
 }
 
-/* ✅ МОДАЛЬНОЕ ОКНО: ДОБАВИТЬ УЧАСТНИКОВ */
+/* ✅ Модалки */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -626,7 +501,6 @@ img {
   padding: 1rem;
   z-index: 50;
 }
-
 .modal-content {
   background: white;
   border-radius: 1.5rem;
@@ -637,20 +511,17 @@ img {
   overflow-y: auto;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
 }
-
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.5rem;
 }
-
 .modal-title {
   font-size: 1.5rem;
   font-weight: 700;
   color: #1f2937;
 }
-
 .modal-close {
   padding: 0.5rem;
   border-radius: 9999px;
@@ -659,12 +530,10 @@ img {
   transition: background-color 0.2s;
   cursor: pointer;
 }
-
 .modal-close:hover {
   background: rgba(147, 51, 234, 0.1);
   color: #8b5cf6;
 }
-
 .modal-search {
   width: 100%;
   padding: 0.75rem 1rem;
@@ -676,35 +545,29 @@ img {
   outline: none;
   margin-bottom: 1rem;
 }
-
 .modal-search:focus {
   border-color: #8b5cf6;
 }
-
 .modal-search::placeholder {
   color: #9ca3af;
 }
-
 .modal-selected {
   background: rgba(147, 51, 234, 0.1);
   border-radius: 0.75rem;
   padding: 0.75rem;
   margin-bottom: 1rem;
 }
-
 .modal-selected-title {
   font-size: 0.875rem;
   font-weight: 600;
   color: #8b5cf6;
   margin-bottom: 0.5rem;
 }
-
 .modal-selected-list {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
 }
-
 .modal-selected-item {
   display: flex;
   align-items: center;
@@ -716,19 +579,16 @@ img {
   font-size: 0.875rem;
   color: #1f2937;
 }
-
 .modal-selected-item button {
   color: #ef4444;
   font-weight: bold;
   cursor: pointer;
 }
-
 .modal-results {
   max-height: 12rem;
   overflow-y: auto;
   margin-bottom: 1rem;
 }
-
 .modal-result-item {
   display: flex;
   align-items: center;
@@ -742,39 +602,32 @@ img {
   background: rgba(249, 250, 251, 0.8);
   border: 2px solid transparent;
 }
-
 .modal-result-item:hover {
   background: rgba(147, 51, 234, 0.1);
 }
-
 .modal-result-item.selected {
   background: rgba(147, 51, 234, 0.15);
   border-color: #8b5cf6;
 }
-
 .modal-result-avatar {
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 9999px;
   object-fit: cover;
 }
-
 .modal-result-info {
   flex: 1;
   min-width: 0;
 }
-
 .modal-result-name {
   font-weight: 600;
   color: #1f2937;
   font-size: 0.95rem;
 }
-
 .modal-result-phone {
   color: #6b7280;
   font-size: 0.8rem;
 }
-
 .modal-result-check {
   width: 1.5rem;
   height: 1.5rem;
@@ -787,7 +640,6 @@ img {
   font-size: 0.75rem;
   font-weight: bold;
 }
-
 .modal-submit {
   width: 100%;
   padding: 0.75rem 1rem;
@@ -800,19 +652,16 @@ img {
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
 }
-
 .modal-submit:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(147, 51, 234, 0.4);
 }
-
 .modal-submit:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
 }
 
-/* ✅ КНОПКА СОЗДАНИЯ ГРУППЫ (плавающая) */
 .fab-create {
   position: fixed;
   bottom: 6rem;
@@ -832,110 +681,58 @@ img {
   z-index: 15;
   border: none;
 }
-
 .fab-create:hover {
   transform: scale(1.05);
   box-shadow: 0 6px 20px rgba(147, 51, 234, 0.6);
 }
-
 .fab-create:active {
   transform: scale(0.95);
 }
 
-/* ✅ УТИЛИТЫ */
-/* Скрыть скроллбар но оставить прокрутку */
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
-
-/* Размытие фона */
 .blur-backdrop {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
-
-/* Градиентный текст */
 .text-gradient {
   background: linear-gradient(135deg, #8b5cf6, #ec4899);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
-
-/* Загрузка — скелетон */
 .skeleton {
   background: linear-gradient(90deg,
-      rgba(147, 51, 234, 0.1) 25%,
-      rgba(147, 51, 234, 0.2) 50%,
-      rgba(147, 51, 234, 0.1) 75%);
+  rgba(147, 51, 234, 0.1) 25%,
+  rgba(147, 51, 234, 0.2) 50%,
+  rgba(147, 51, 234, 0.1) 75%);
   background-size: 200% 100%;
   animation: loading 1.5s infinite;
   border-radius: 0.5rem;
 }
-
 @keyframes loading {
-  0% {
-    background-position: 200% 0;
-  }
-
-  100% {
-    background-position: -200% 0;
-  }
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
-/* ✅ АДАПТИВНОСТЬ */
-/* Планшеты */
+/* ✅ Адаптивность */
 @media (max-width: 1024px) {
-  .group-chat-messages {
-    min-height: 55vh;
-  }
+  .group-chat-messages { min-height: 55vh; }
 }
-
-/* Мобильные */
 @media (max-width: 768px) {
-  .group-message {
-    max-width: 85%;
-  }
-
-  .group-chat-header-content {
-    padding: 0.5rem;
-  }
-
-  .group-chat-header-avatar {
-    width: 40px;
-    height: 40px;
-    font-size: 1rem;
-  }
-
-  .group-chat-header-name {
-    font-size: 1rem;
-  }
-
-  .fab-create {
-    bottom: 5.5rem;
-    right: 1rem;
-    width: 3rem;
-    height: 3rem;
-    font-size: 1.125rem;
-  }
+  .group-message { max-width: 85%; }
+  .group-chat-header-content { padding: 0.5rem; }
+  .group-chat-header-avatar { width: 40px; height: 40px; font-size: 1rem; }
+  .group-chat-header-name { font-size: 1rem; }
+  .fab-create { bottom: 5.5rem; right: 1rem; width: 3rem; height: 3rem; font-size: 1.125rem; }
 }
-
-/* Очень маленькие экраны */
 @media (max-width: 480px) {
-  .group-message {
-    max-width: 90%;
-  }
-
-  .group-chat-input-wrapper {
-    flex-wrap: wrap;
-  }
-
-  .group-chat-input-text {
-    min-width: 150px;
-  }
+  .group-message { max-width: 90%; }
+  .group-chat-input-wrapper { flex-wrap: wrap; }
+  .group-chat-input-text { min-width: 150px; }
 }

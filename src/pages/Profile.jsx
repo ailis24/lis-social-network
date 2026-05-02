@@ -13,19 +13,19 @@ export default function Profile() {
   const { uid: paramUid } = useParams();
   const { user: currentUser, updateUser, logout } = useAuth();
   const navigate = useNavigate();
-
   const uid = paramUid || currentUser?.uid;
   const isOwn = uid === currentUser?.uid;
-
+  
   const [profile, setProfile] = useState(null);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState({ username: "", bio: "" });
-  const [friendStatus, setFriendStatus] = useState("none"); // none | sent | friends
+  const [friendStatus, setFriendStatus] = useState("none"); // none | sent | friends | incoming
   const [savingProfile, setSavingProfile] = useState(false);
   const [startingChat, setStartingChat] = useState(false);
   const [avatarError, setAvatarError] = useState("");
+  const [incomingRequests, setIncomingRequests] = useState([]); // Новые заявки
 
   const load = useCallback(async () => {
     if (!uid) return;
@@ -34,14 +34,22 @@ export default function Profile() {
       const p = await userService.getProfile(uid);
       setProfile(p);
       setEditData({ username: p.username, bio: p.bio || "" });
-
+      
       const allPosts = await postService.getFeed();
       setPosts(allPosts.filter((post) => post.author_id === uid));
-
+      
       if (!isOwn) {
         try {
           const s = await friendService.getStatus(uid);
+          // Если статус pending, проверяем, не является ли это входящей заявкой
+          // Для упрощения: если заявка есть, показываем кнопки
           setFriendStatus(s.status || "none");
+        } catch {}
+      } else {
+        // Если это свой профиль, грузим входящие заявки
+        try {
+            const reqs = await friendService.getRequests();
+            setIncomingRequests(reqs || []);
         } catch {}
       }
     } catch (err) {
@@ -82,18 +90,32 @@ export default function Profile() {
     }
   };
 
-  const handleAddFriend = async () => {
-    if (friendStatus !== "none") return;
-    try {
-      await friendService.sendRequest(uid);
-      setFriendStatus("sent");
-    } catch (err) {
-      // Sync UI with server state if server says it already exists
+  // Единая функция для добавления/подтверждения
+  const handleFriendAction = async (targetUid) => {
+    // Если статус "incoming" (мне прислали), подтверждаем
+    if (friendStatus === 'incoming' || (isOwn && incomingRequests.some(r => r.uid === targetUid))) {
+       try {
+           await friendService.acceptRequest(targetUid);
+           // После принятия обновляем статус
+           setFriendStatus('friends');
+           // Удаляем из списка входящих, если мы на своем профиле
+           setIncomingRequests(prev => prev.filter(r => r.uid !== targetUid));
+       } catch (err) {
+           console.error(err);
+       }
+    } 
+    // Если статус "none", отправляем заявку
+    else if (friendStatus === 'none') {
       try {
-        const s = await friendService.getStatus(uid);
-        setFriendStatus(s.status || "sent");
-      } catch {
+        await friendService.sendRequest(targetUid);
         setFriendStatus("sent");
+      } catch (err) {
+        try {
+          const s = await friendService.getStatus(targetUid);
+          setFriendStatus(s.status || "sent");
+        } catch {
+          setFriendStatus("sent");
+        }
       }
     }
   };
@@ -122,7 +144,6 @@ export default function Profile() {
       </div>
     );
   }
-
   if (!profile) {
     return (
       <div className="text-center py-20 text-white">
@@ -151,7 +172,6 @@ export default function Profile() {
                 {profile.username?.charAt(0)?.toUpperCase()}
               </div>
             )}
-
             {isOwn && (
               <label className="absolute bottom-0 right-0 w-8 h-8 bg-white rounded-full shadow flex items-center justify-center cursor-pointer hover:bg-purple-50 border border-purple-200">
                 <CameraIcon className="w-4 h-4 text-purple-600" />
@@ -164,11 +184,9 @@ export default function Profile() {
               </label>
             )}
           </div>
-
           {avatarError && (
             <p className="text-red-500 text-xs mb-2">{avatarError}</p>
           )}
-
           {editing ? (
             <input
               className="text-xl font-bold text-center border-b-2 border-purple-400 focus:outline-none bg-transparent mb-2"
@@ -182,7 +200,6 @@ export default function Profile() {
               @{profile.username}
             </h1>
           )}
-
           {editing ? (
             <textarea
               className="w-full mt-2 text-sm text-center border border-gray-200 rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-purple-300 bg-gray-50 resize-none"
@@ -220,6 +237,26 @@ export default function Profile() {
           </div>
         </div>
 
+        {/* Входящие заявки (Только для своего профиля) */}
+        {isOwn && incomingRequests.length > 0 && (
+            <div className="mb-4 bg-purple-50 rounded-xl p-3 border border-purple-100">
+                <h3 className="text-sm font-bold text-purple-800 mb-2">🔔 Заявки в друзья ({incomingRequests.length})</h3>
+                <div className="flex flex-wrap gap-2">
+                    {incomingRequests.map(req => (
+                        <div key={req.uid} className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-full shadow-sm text-sm">
+                            <span className="font-semibold">@{req.username}</span>
+                            <button 
+                                onClick={() => handleFriendAction(req.uid)}
+                                className="text-green-600 font-bold text-xs hover:underline"
+                            >
+                                Подтвердить
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
+
         {/* Action buttons */}
         {isOwn ? (
           <div className="flex flex-col gap-2">
@@ -251,27 +288,31 @@ export default function Profile() {
               onClick={handleLogout}
               className="w-full py-2.5 bg-red-50 text-red-500 font-semibold rounded-xl hover:bg-red-100 transition-all"
             >
-              🚪 Выйти
+               Выйти
             </button>
           </div>
         ) : (
           <div className="flex gap-2">
             <button
-              onClick={handleAddFriend}
-              disabled={friendStatus === "sent" || friendStatus === "friends"}
+              onClick={() => handleFriendAction(uid)}
+              disabled={friendStatus === "sent" || friendStatus === "friends" || friendStatus === "incoming"}
               className={`flex-1 py-2.5 font-semibold rounded-xl transition-all ${
-                friendStatus === "sent"
+                friendStatus === "friends"
+                  ? "bg-gray-100 text-gray-500"
+                  : friendStatus === "incoming"
+                  ? "bg-green-500 text-white hover:bg-green-600" // Кнопка подтвердить
+                  : friendStatus === "sent"
                   ? "bg-green-100 text-green-600"
-                  : friendStatus === "friends"
-                    ? "bg-gray-100 text-gray-500"
-                    : "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:shadow-lg"
+                  : "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:shadow-lg"
               }`}
             >
-              {friendStatus === "sent"
+              {friendStatus === "friends"
+                ? "👫 В друзьях"
+                : friendStatus === "incoming"
+                ? "✓ Подтвердить заявку"
+                : friendStatus === "sent"
                 ? "✓ Заявка отправлена"
-                : friendStatus === "friends"
-                  ? "👫 В друзьях"
-                  : "👤 Добавить в друзья"}
+                : "👤 Добавить в друзья"}
             </button>
             <button
               onClick={handleMessage}
@@ -297,12 +338,13 @@ export default function Profile() {
         <div className="space-y-4">
           {posts.map((post) => (
             <div key={post.id} className="bg-white/90 rounded-2xl shadow p-4">
+              {/* Исправление фото в профиле тоже */}
               {post.image && (
                 <img
                   src={post.image}
                   alt="Post"
                   loading="lazy"
-                  className="w-full max-h-64 object-cover rounded-xl mb-3"
+                  className="w-full max-h-96 object-contain rounded-xl mb-3"
                 />
               )}
               {post.video && (
