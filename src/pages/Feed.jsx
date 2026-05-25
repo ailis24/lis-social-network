@@ -1054,6 +1054,19 @@ const FeedLocked = ({ lockUntil, onUnlock }) => {
 };
 
 // ─── Post Component ────────────────────────────────────────────────────────────
+const TEAR_CSS = `
+  @keyframes tearTop {
+    0%   { transform: translateY(0) rotate(0deg) scaleX(1); opacity: 1; clip-path: polygon(0 0,100% 0,100% 52%,0 48%); }
+    100% { transform: translateY(-120px) rotate(-8deg) scaleX(0.85); opacity: 0; clip-path: polygon(0 0,100% 0,100% 52%,0 48%); }
+  }
+  @keyframes tearBottom {
+    0%   { transform: translateY(0) rotate(0deg) scaleX(1); opacity: 1; clip-path: polygon(0 48%,100% 52%,100% 100%,0 100%); }
+    100% { transform: translateY(90px) rotate(6deg) scaleX(0.85); opacity: 0; clip-path: polygon(0 48%,100% 52%,100% 100%,0 100%); }
+  }
+  .post-tear-top    { animation: tearTop    0.75s cubic-bezier(0.4,0,0.2,1) forwards; pointer-events:none; }
+  .post-tear-bottom { animation: tearBottom 0.75s cubic-bezier(0.4,0,0.2,1) forwards; pointer-events:none; }
+`;
+
 const Post = ({ post, currentUser, onLike, onAddComment, onVote, onDelete }) => {
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState([]);
@@ -1061,7 +1074,19 @@ const Post = ({ post, currentUser, onLike, onAddComment, onVote, onDelete }) => 
   const [commentFile, setCommentFile] = useState(null);
   const [showStickers, setShowStickers] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
+  const [tearing, setTearing] = useState(false);
+  const postRef = useRef(null);
   const liked = post.likes?.includes(currentUser?.uid);
+
+  const handleDelete = () => {
+    const isMine = post.author_id === currentUser?.uid;
+    const msg = isMine
+      ? "Удалить эту публикацию?"
+      : "🛡 Удалить как администратор? (нарушения 18+, оскорбление религии, терроризм)";
+    if (!confirm(msg)) return;
+    setTearing(true);
+    setTimeout(() => onDelete(post.id), 700);
+  };
 
   // Normalize poll options (string or {text, votes})
   const pollOptions = post.poll_data?.options?.map((o) =>
@@ -1104,8 +1129,52 @@ const Post = ({ post, currentUser, onLike, onAddComment, onVote, onDelete }) => 
     setShowStickers(false);
   };
 
+  if (tearing) {
+    const inner = postRef.current;
+    const h = inner ? inner.offsetHeight : 200;
+    return (
+      <>
+        <style>{TEAR_CSS}</style>
+        <div style={{ position: "relative", height: h, marginBottom: 16, overflow: "visible" }}>
+          <div
+            className="post-tear-top bg-white/95 backdrop-blur rounded-2xl shadow-md overflow-hidden"
+            style={{ position: "absolute", inset: 0 }}
+          >
+            <div className="flex items-center gap-3 p-4">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-sm">
+                {post.username?.charAt(0)?.toUpperCase()}
+              </div>
+              <div>
+                <p className="font-semibold text-gray-800">@{post.username}</p>
+                <p className="text-xs text-gray-400">{new Date(post.created_at).toLocaleString("ru-RU")}</p>
+              </div>
+            </div>
+            {post.content && <p className="px-4 pb-3 text-gray-800 whitespace-pre-wrap">{post.content}</p>}
+          </div>
+          <div
+            className="post-tear-bottom bg-white/95 backdrop-blur rounded-2xl shadow-md overflow-hidden"
+            style={{ position: "absolute", inset: 0 }}
+          >
+            <div className="flex items-center gap-3 p-4">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-sm">
+                {post.username?.charAt(0)?.toUpperCase()}
+              </div>
+              <div>
+                <p className="font-semibold text-gray-800">@{post.username}</p>
+                <p className="text-xs text-gray-400">{new Date(post.created_at).toLocaleString("ru-RU")}</p>
+              </div>
+            </div>
+            {post.content && <p className="px-4 pb-3 text-gray-800 whitespace-pre-wrap">{post.content}</p>}
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
-    <div className="bg-white/95 backdrop-blur rounded-2xl shadow-md mb-4 overflow-hidden">
+    <>
+      <style>{TEAR_CSS}</style>
+      <div ref={postRef} className="bg-white/95 backdrop-blur rounded-2xl shadow-md mb-4 overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-3 p-4">
         <Link to={`/profile/${post.author_id}`}>
@@ -1135,13 +1204,7 @@ const Post = ({ post, currentUser, onLike, onAddComment, onVote, onDelete }) => 
         </div>
         {(post.author_id === currentUser?.uid || currentUser?.is_admin) && (
           <button
-            onClick={() => {
-              const isMine = post.author_id === currentUser?.uid;
-              const msg = isMine
-                ? "Удалить эту публикацию?"
-                : "🛡 Удалить как администратор? (нарушения 18+, оскорбление религии, терроризм)";
-              if (confirm(msg)) onDelete(post.id);
-            }}
+            onClick={handleDelete}
             className={`ml-auto text-xl px-2 ${
               post.author_id === currentUser?.uid
                 ? "text-gray-300 hover:text-red-500"
@@ -1363,6 +1426,7 @@ const Post = ({ post, currentUser, onLike, onAddComment, onVote, onDelete }) => 
         </div>
       )}
     </div>
+    </>
   );
 };
 

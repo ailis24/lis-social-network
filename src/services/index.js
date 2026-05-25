@@ -290,6 +290,15 @@ export const friendService = {
     if (!res.ok) throw new Error("Friends list failed");
     return await res.json();
   },
+
+  declineRequest: async (friendId) => {
+    const res = await fetch(`${API_URL}/api/friends/${friendId}`, {
+      method: "DELETE",
+      headers: getAuthHeader(),
+    });
+    if (!res.ok) throw new Error("Decline failed");
+    return await res.json();
+  },
 };
 
 export const storyService = {

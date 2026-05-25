@@ -3,8 +3,9 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { notificationService, friendService } from "../services";
 
-function NotifItem({ n, onAccepted }) {
+function NotifItem({ n, onAccepted, onDeclined }) {
   const [accepted, setAccepted] = useState(n.type === "friend_accepted");
+  const [declined, setDeclined] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleAccept = async () => {
@@ -17,6 +18,16 @@ function NotifItem({ n, onAccepted }) {
     setLoading(false);
   };
 
+  const handleDecline = async () => {
+    setLoading(true);
+    try {
+      await friendService.declineRequest(n.sender_id);
+      setDeclined(true);
+      onDeclined && onDeclined(n.sender_id);
+    } catch {}
+    setLoading(false);
+  };
+
   const icon =
     n.type === "like"
       ? "❤️"
@@ -25,6 +36,8 @@ function NotifItem({ n, onAccepted }) {
         : n.type === "friend_request" || n.type === "friend_accepted"
           ? "👤"
           : "🔔";
+
+  if (declined) return null;
 
   return (
     <div
@@ -42,13 +55,22 @@ function NotifItem({ n, onAccepted }) {
             {new Date(n.created_at).toLocaleString("ru-RU")}
           </p>
           {n.type === "friend_request" && !accepted && (
-            <button
-              onClick={handleAccept}
-              disabled={loading}
-              className="mt-1.5 px-3 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold rounded-full disabled:opacity-50"
-            >
-              {loading ? "..." : "✓ Принять в друзья"}
-            </button>
+            <div className="flex gap-2 mt-1.5">
+              <button
+                onClick={handleAccept}
+                disabled={loading}
+                className="px-3 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold rounded-full disabled:opacity-50"
+              >
+                {loading ? "..." : "✅ Принять"}
+              </button>
+              <button
+                onClick={handleDecline}
+                disabled={loading}
+                className="px-3 py-1 bg-gray-100 text-gray-500 text-xs font-bold rounded-full hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+              >
+                ❌ Отклонить
+              </button>
+            </div>
           )}
           {(n.type === "friend_accepted" ||
             (n.type === "friend_request" && accepted)) && (
@@ -226,6 +248,13 @@ export default function Header() {
                               x.type === "friend_request"
                                 ? { ...x, type: "friend_accepted" }
                                 : x,
+                            ),
+                          );
+                        }}
+                        onDeclined={(senderId) => {
+                          setNotifications((prev) =>
+                            prev.filter(
+                              (x) => !(x.sender_id === senderId && x.type === "friend_request"),
                             ),
                           );
                         }}
