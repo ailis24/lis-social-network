@@ -169,6 +169,15 @@ export default function Header() {
             Lis
           </Link>
           <div className="flex justify-end items-center gap-2">
+            {user?.is_admin && (
+              <Link
+                to="/admin"
+                title="Панель администратора"
+                className="w-9 h-9 rounded-full bg-yellow-400/90 hover:bg-yellow-300 flex items-center justify-center text-lg transition-all shadow-sm"
+              >
+                👑
+              </Link>
+            )}
             <Link
               to="/messages"
               title="Сообщения"

@@ -14,6 +14,7 @@ const Feed = lazy(() => import("./pages/Feed"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Messages = lazy(() => import("./pages/Messages"));
 const Search = lazy(() => import("./pages/Search"));
+const AdminPanel = lazy(() => import("./pages/AdminPanel"));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center py-20">
@@ -162,6 +163,17 @@ function AppRoutes() {
             <ProtectedRoute>
               <AppLayout>
                 <Search />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <AdminPanel />
               </AppLayout>
             </ProtectedRoute>
           }

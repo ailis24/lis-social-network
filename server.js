@@ -132,6 +132,17 @@ db.exec(`
     activated_at TEXT DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS payment_checks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    user_phone TEXT NOT NULL,
+    image_url TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    admin_note TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(uid)
+  );
+
   CREATE TABLE IF NOT EXISTS challenges (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     author_id TEXT NOT NULL,
@@ -340,6 +351,20 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// Admin middleware — server-side check; never trust client-sent isAdmin flag
+const requireAdmin = (req, res, next) => {
+  try {
+    const me = db.prepare("SELECT is_admin, phone FROM users WHERE uid = ?").get(req.user.uid);
+    if (!me || me.is_admin !== 1) {
+      return res.status(403).json({ error: "Доступ запрещён" });
+    }
+    req.isAdmin = true;
+    next();
+  } catch {
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
 // Health check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", storage: "SQLite" });
@@ -531,7 +556,13 @@ app.get("/api/users/:uid", authenticateToken, (req, res) => {
       )
       .get(req.params.uid, req.params.uid);
 
-    res.json({
+    // Check if requester is admin — admins see phone + admin flags
+    const requester = db.prepare("SELECT is_admin FROM users WHERE uid = ?").get(req.user.uid);
+    const requesterIsAdmin = requester?.is_admin === 1;
+
+    const isPremiumActive = hasPremium(user.uid);
+
+    const response = {
       uid: user.uid,
       username: user.username,
       avatar: user.avatar,
@@ -540,7 +571,15 @@ app.get("/api/users/:uid", authenticateToken, (req, res) => {
       friendsCount: friendsCount?.count || 0,
       followingCount: 0,
       followersCount: 0,
-    });
+      is_admin: user.is_admin === 1,
+      isPremium: isPremiumActive,
+    };
+
+    if (requesterIsAdmin) {
+      response.phone = user.phone || "";
+    }
+
+    res.json(response);
   } catch (error) {
     res.status(500).json({ error: "Server error" });
   }
@@ -1681,6 +1720,140 @@ app.delete("/api/challenges/:id", authenticateToken, (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+// ============ ADMIN ROUTES ============
+
+// Toggle premium for any user (admin only)
+app.post("/api/admin/premium/:uid", authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { uid } = req.params;
+    const target = db.prepare("SELECT uid, username FROM users WHERE uid = ?").get(uid);
+    if (!target) return res.status(404).json({ error: "Пользователь не найден" });
+
+    const existing = db.prepare("SELECT expires_at FROM subscriptions WHERE user_id = ?").get(uid);
+    const isActive = existing && new Date(existing.expires_at) > new Date();
+
+    if (isActive) {
+      // Deactivate — set expiry to past
+      db.prepare("UPDATE subscriptions SET expires_at = datetime('now', '-1 second') WHERE user_id = ?").run(uid);
+      console.log(`[ADMIN] ${req.user.uid} деактивировал премиум у ${uid}`);
+      res.json({ isPremium: false, message: "Премиум отключён" });
+    } else {
+      // Activate for 30 days
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      if (existing) {
+        db.prepare("UPDATE subscriptions SET expires_at = ?, activated_at = datetime('now') WHERE user_id = ?").run(expiresAt, uid);
+      } else {
+        db.prepare("INSERT INTO subscriptions (user_id, expires_at) VALUES (?, ?)").run(uid, expiresAt);
+      }
+      // Reset feed timer lock for premium user
+      db.prepare("UPDATE feed_timers SET session_time = 0, is_locked = 0, lock_until = NULL WHERE user_id = ?").run(uid);
+      console.log(`[ADMIN] ${req.user.uid} активировал премиум у ${uid} до ${expiresAt}`);
+      res.json({ isPremium: true, expiresAt, message: "Премиум активирован на 30 дней" });
+    }
+  } catch (error) {
+    console.error("Admin premium error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Transfer admin rights
+app.post("/api/admin/transfer", authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: "Введите номер телефона" });
+    const normPhone = String(phone).replace(/[^\d+]/g, "");
+    const target = db.prepare("SELECT uid, username FROM users WHERE phone = ?").get(normPhone);
+    if (!target) return res.status(404).json({ error: "Пользователь с таким номером не найден" });
+    if (target.uid === req.user.uid) return res.status(400).json({ error: "Нельзя передать права себе" });
+
+    db.prepare("UPDATE users SET is_admin = 0 WHERE uid = ?").run(req.user.uid);
+    db.prepare("UPDATE users SET is_admin = 1 WHERE uid = ?").run(target.uid);
+
+    // Notify both
+    db.prepare("INSERT INTO notifications (recipient_id, sender_id, type, message) VALUES (?, ?, 'system', ?)").run(
+      target.uid, req.user.uid, "Вам переданы права администратора"
+    );
+    db.prepare("INSERT INTO notifications (recipient_id, sender_id, type, message) VALUES (?, ?, 'system', ?)").run(
+      req.user.uid, req.user.uid, "Вы передали права администратора"
+    );
+
+    console.log(`[ADMIN] ${req.user.uid} передал права администратора → ${target.uid}`);
+    res.json({ success: true, newAdmin: target.username });
+  } catch (error) {
+    console.error("Admin transfer error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// List all payment checks (admin)
+app.get("/api/admin/checks", authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const checks = db.prepare(
+      `SELECT pc.*, u.username, u.avatar
+       FROM payment_checks pc
+       JOIN users u ON u.uid = pc.user_id
+       ORDER BY pc.created_at DESC LIMIT 100`
+    ).all();
+    res.json(checks);
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Approve or reject a check (admin)
+app.put("/api/admin/checks/:id", authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { status, adminNote } = req.body;
+    if (!["approved", "rejected"].includes(status)) {
+      return res.status(400).json({ error: "Статус: approved | rejected" });
+    }
+    const check = db.prepare("SELECT * FROM payment_checks WHERE id = ?").get(req.params.id);
+    if (!check) return res.status(404).json({ error: "Чек не найден" });
+
+    db.prepare("UPDATE payment_checks SET status = ?, admin_note = ? WHERE id = ?")
+      .run(status, adminNote || "", req.params.id);
+
+    console.log(`[ADMIN] ${req.user.uid} ${status} чек #${req.params.id} пользователя ${check.user_id}`);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Submit a payment check (any user)
+app.post(
+  "/api/checks",
+  authenticateToken,
+  uploadLimiter,
+  upload.single("image"),
+  (req, res) => {
+    try {
+      const { userPhone } = req.body;
+      if (!req.file) return res.status(400).json({ error: "Прикрепите скриншот чека" });
+      const normPhone = String(userPhone || "").replace(/[^\d+]/g, "");
+      if (!normPhone) return res.status(400).json({ error: "Введите номер телефона" });
+
+      const imageUrl = `/uploads/${req.file.filename}`;
+      const result = db.prepare(
+        "INSERT INTO payment_checks (user_id, user_phone, image_url, status) VALUES (?, ?, ?, 'pending')"
+      ).run(req.user.uid, normPhone, imageUrl);
+
+      // Notify all admins
+      const admins = db.prepare("SELECT uid FROM users WHERE is_admin = 1").all();
+      for (const admin of admins) {
+        db.prepare("INSERT INTO notifications (recipient_id, sender_id, type, message) VALUES (?, ?, 'system', ?)").run(
+          admin.uid, req.user.uid, "Новый чек об оплате ожидает проверки"
+        );
+      }
+
+      res.json({ success: true, id: result.lastInsertRowid });
+    } catch (error) {
+      console.error("Submit check error:", error);
+      res.status(500).json({ error: "Server error" });
+    }
+  }
+);
 
 // ============ GLOBAL ERROR HANDLERS ============
 // 404 for unknown API routes

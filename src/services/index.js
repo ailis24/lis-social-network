@@ -490,6 +490,63 @@ export const challengeService = {
   },
 };
 
+export const adminService = {
+  togglePremium: async (uid) => {
+    const res = await fetch(`${API_URL}/api/admin/premium/${uid}`, {
+      method: "POST",
+      headers: getAuthHeader(),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Admin premium failed");
+    return data;
+  },
+
+  transferRights: async (phone) => {
+    const res = await fetch(`${API_URL}/api/admin/transfer`, {
+      method: "POST",
+      headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+      body: JSON.stringify({ phone }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Transfer failed");
+    return data;
+  },
+
+  getChecks: async () => {
+    const res = await fetch(`${API_URL}/api/admin/checks`, {
+      headers: getAuthHeader(),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Get checks failed");
+    return data;
+  },
+
+  updateCheck: async (id, status, adminNote = "") => {
+    const res = await fetch(`${API_URL}/api/admin/checks/${id}`, {
+      method: "PUT",
+      headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+      body: JSON.stringify({ status, adminNote }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Update check failed");
+    return data;
+  },
+
+  submitCheck: async (userPhone, imageFile) => {
+    const formData = new FormData();
+    formData.append("userPhone", userPhone);
+    formData.append("image", imageFile);
+    const res = await fetch(`${API_URL}/api/checks`, {
+      method: "POST",
+      headers: getAuthHeader(),
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Submit check failed");
+    return data;
+  },
+};
+
 export const premiumService = {
   getStatus: async () => {
     const res = await fetch(`${API_URL}/api/premium/status`, {

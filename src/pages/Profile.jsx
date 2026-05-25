@@ -7,6 +7,7 @@ import {
   friendService,
   messageService,
   callService,
+  adminService,
 } from "../services";
 import { CameraIcon } from "@heroicons/react/24/outline";
 import CallModal from "../components/CallModal";
@@ -32,6 +33,14 @@ export default function Profile() {
   const [showFriendsList, setShowFriendsList] = useState(false);
   const [friendsList, setFriendsList] = useState([]);
   const [friendsListLoading, setFriendsListLoading] = useState(false);
+  const [premiumLoading, setPremiumLoading] = useState(false);
+  const [profileIsPremium, setProfileIsPremium] = useState(false);
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [transferPhone, setTransferPhone] = useState("");
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [transferMsg, setTransferMsg] = useState("");
+
+  const isViewerAdmin = !!currentUser?.is_admin;
 
   const load = useCallback(async () => {
     if (!uid) return;
@@ -40,6 +49,7 @@ export default function Profile() {
       const p = await userService.getProfile(uid);
       setProfile(p);
       setEditData({ username: p.username, bio: p.bio || "" });
+      setProfileIsPremium(!!p.isPremium);
 
       const allPosts = await postService.getFeed();
       setPosts(allPosts.filter((post) => post.author_id === uid));
@@ -133,6 +143,34 @@ export default function Profile() {
     navigate("/login");
   };
 
+  const handleTogglePremium = async () => {
+    setPremiumLoading(true);
+    try {
+      const result = await adminService.togglePremium(uid);
+      setProfileIsPremium(result.isPremium);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setPremiumLoading(false);
+    }
+  };
+
+  const handleTransferRights = async () => {
+    if (!transferPhone.trim()) return;
+    if (!confirm(`Передать права администратора на номер ${transferPhone}? Вы потеряете доступ к панели администратора.`)) return;
+    setTransferLoading(true);
+    setTransferMsg("");
+    try {
+      const result = await adminService.transferRights(transferPhone.trim());
+      setTransferMsg(`✅ Права переданы пользователю @${result.newAdmin}`);
+      setTransferPhone("");
+    } catch (err) {
+      setTransferMsg(`❌ ${err.message}`);
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -196,9 +234,36 @@ export default function Profile() {
               }
             />
           ) : (
-            <h1 className="text-2xl font-bold text-gray-800">
-              @{profile.username}
-            </h1>
+            <div className="flex items-center gap-2 justify-center flex-wrap">
+              <h1 className="text-2xl font-bold text-gray-800">
+                @{profile.username}
+              </h1>
+              {profileIsPremium && (
+                <span className="text-yellow-500 text-xl" title="Премиум">💎</span>
+              )}
+              {profile.is_admin && (
+                <span className="text-purple-600 text-xl" title="Администратор">👑</span>
+              )}
+              {/* Admin-only: toggle premium button */}
+              {isViewerAdmin && (
+                <button
+                  onClick={handleTogglePremium}
+                  disabled={premiumLoading}
+                  title={profileIsPremium ? "Отключить Премиум" : "Включить Премиум"}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold shadow transition-all hover:scale-110 active:scale-95 ${
+                    profileIsPremium
+                      ? "bg-yellow-400 text-white hover:bg-yellow-500"
+                      : "bg-gray-200 text-gray-500 hover:bg-yellow-100 border border-dashed border-yellow-400"
+                  } disabled:opacity-50`}
+                >
+                  {premiumLoading ? "..." : "💎"}
+                </button>
+              )}
+            </div>
+          )}
+          {/* Admin sees phone number */}
+          {isViewerAdmin && profile.phone && (
+            <p className="text-xs text-gray-400 mt-1 font-mono">{profile.phone}</p>
           )}
 
           {editing ? (
@@ -275,6 +340,42 @@ export default function Profile() {
               🚪 Выйти
             </button>
           </div>
+
+          {/* Admin-only section: transfer rights */}
+          {isViewerAdmin && isOwn && (
+            <div className="mt-4 border-t border-gray-100 pt-4">
+              <button
+                onClick={() => setShowTransfer((v) => !v)}
+                className="w-full py-2 bg-purple-50 text-purple-700 font-semibold rounded-xl hover:bg-purple-100 transition-all text-sm flex items-center justify-center gap-2"
+              >
+                🛡️ Права администратора
+              </button>
+              {showTransfer && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs text-gray-500 text-center">
+                    Введите номер нового администратора. Ваши права будут переданы.
+                  </p>
+                  <input
+                    type="tel"
+                    placeholder="+79991234567"
+                    value={transferPhone}
+                    onChange={(e) => setTransferPhone(e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-300"
+                  />
+                  <button
+                    onClick={handleTransferRights}
+                    disabled={transferLoading || !transferPhone.trim()}
+                    className="w-full py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 text-sm"
+                  >
+                    {transferLoading ? "Передаём..." : "Передать права"}
+                  </button>
+                  {transferMsg && (
+                    <p className="text-sm text-center font-medium">{transferMsg}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         ) : (
           <>
           <div className="flex flex-col gap-2">
