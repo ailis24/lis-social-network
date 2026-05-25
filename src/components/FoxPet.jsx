@@ -157,12 +157,13 @@ export default function FoxPet() {
   const [flipped, setFlip] = useState(false);
   const [msg, setMsg] = useState("");
 
-  const walkRef  = useRef(null);
-  const stateRef = useRef("idle");
-  const posRef   = useRef(pos);
-  const msgRef   = useRef(null);
-  const nextRef  = useRef(null);
-  const statsRef = useRef(stats);
+  const walkRef     = useRef(null);
+  const stateRef    = useRef("idle");
+  const posRef      = useRef(pos);
+  const msgRef      = useRef(null);
+  const nextRef     = useRef(null);
+  const statsRef    = useRef(stats);
+  const heartCntRef = useRef(0);
 
   posRef.current   = pos;
   stateRef.current = foxState;
@@ -374,7 +375,7 @@ export default function FoxPet() {
     const now = Date.now();
     setStats((prev) => {
       if (now - prev.lastPet < 300000) return prev;
-      const id = now;
+      const id = ++heartCntRef.current;
       setHearts((h) => [...h, { id, x: rnd(-20, 20), y: rnd(-10, 10) }]);
       setTimeout(() => setHearts((h) => h.filter((x) => x.id !== id)), 1200);
       return { ...prev, happiness: Math.min(100, prev.happiness + 10), lastPet: now, ignoredSince: now };

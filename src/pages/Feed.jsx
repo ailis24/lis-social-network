@@ -1054,17 +1054,58 @@ const FeedLocked = ({ lockUntil, onUnlock }) => {
 };
 
 // ─── Post Component ────────────────────────────────────────────────────────────
+
+// Jagged tear line at ~50% — mimics torn paper edge
+const TEAR_TOP_CLIP = `polygon(
+  0% 0%, 100% 0%, 100% 44%,
+  97% 47%, 93% 43%, 89% 48%, 85% 44%, 81% 49%,
+  77% 45%, 73% 50%, 69% 46%, 65% 51%, 61% 47%,
+  57% 52%, 53% 48%, 49% 53%, 45% 49%, 41% 54%,
+  37% 50%, 33% 46%, 29% 51%, 25% 47%, 21% 52%,
+  17% 48%, 13% 44%, 9% 49%, 5% 45%, 2% 48%, 0% 46%
+)`;
+const TEAR_BOT_CLIP = `polygon(
+  0% 46%, 2% 48%, 5% 45%, 9% 49%, 13% 44%, 17% 48%,
+  21% 52%, 25% 47%, 29% 51%, 33% 46%, 37% 50%,
+  41% 54%, 45% 49%, 49% 53%, 53% 48%, 57% 52%,
+  61% 47%, 65% 51%, 69% 46%, 73% 50%, 77% 45%,
+  81% 49%, 85% 44%, 89% 48%, 93% 43%, 97% 47%,
+  100% 44%, 100% 100%, 0% 100%
+)`;
+
 const TEAR_CSS = `
-  @keyframes tearTop {
-    0%   { transform: translateY(0) rotate(0deg) scaleX(1); opacity: 1; clip-path: polygon(0 0,100% 0,100% 52%,0 48%); }
-    100% { transform: translateY(-120px) rotate(-8deg) scaleX(0.85); opacity: 0; clip-path: polygon(0 0,100% 0,100% 52%,0 48%); }
+  @keyframes postShake {
+    0%,100% { transform: translateX(0) rotate(0deg); }
+    15%     { transform: translateX(-6px) rotate(-1.5deg); }
+    30%     { transform: translateX(6px) rotate(1.5deg); }
+    45%     { transform: translateX(-5px) rotate(-1deg); }
+    60%     { transform: translateX(5px) rotate(1deg); }
+    75%     { transform: translateX(-3px) rotate(-0.5deg); }
+    90%     { transform: translateX(3px) rotate(0.5deg); }
   }
-  @keyframes tearBottom {
-    0%   { transform: translateY(0) rotate(0deg) scaleX(1); opacity: 1; clip-path: polygon(0 48%,100% 52%,100% 100%,0 100%); }
-    100% { transform: translateY(90px) rotate(6deg) scaleX(0.85); opacity: 0; clip-path: polygon(0 48%,100% 52%,100% 100%,0 100%); }
+  @keyframes tearFlyTop {
+    0%   { transform: translateY(0) translateX(0) rotate(0deg) scale(1); opacity: 1; }
+    20%  { transform: translateY(-20px) translateX(-10px) rotate(-4deg) scale(1.02); opacity: 1; }
+    100% { transform: translateY(-160px) translateX(-60px) rotate(-22deg) scale(0.7); opacity: 0; }
   }
-  .post-tear-top    { animation: tearTop    0.75s cubic-bezier(0.4,0,0.2,1) forwards; pointer-events:none; }
-  .post-tear-bottom { animation: tearBottom 0.75s cubic-bezier(0.4,0,0.2,1) forwards; pointer-events:none; }
+  @keyframes tearFlyBottom {
+    0%   { transform: translateY(0) translateX(0) rotate(0deg) scale(1); opacity: 1; }
+    20%  { transform: translateY(15px) translateX(8px) rotate(3deg) scale(1.02); opacity: 1; }
+    100% { transform: translateY(130px) translateX(50px) rotate(18deg) scale(0.7); opacity: 0; }
+  }
+  .post-shaking   { animation: postShake 0.35s ease-in-out; }
+  .post-tear-top  {
+    clip-path: ${TEAR_TOP_CLIP};
+    animation: tearFlyTop 0.7s cubic-bezier(0.25,0.46,0.45,0.94) forwards;
+    pointer-events: none;
+    filter: drop-shadow(0 -4px 12px rgba(0,0,0,0.25));
+  }
+  .post-tear-bottom {
+    clip-path: ${TEAR_BOT_CLIP};
+    animation: tearFlyBottom 0.7s cubic-bezier(0.25,0.46,0.45,0.94) forwards;
+    pointer-events: none;
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.25));
+  }
 `;
 
 const Post = ({ post, currentUser, onLike, onAddComment, onVote, onDelete }) => {
@@ -1074,7 +1115,8 @@ const Post = ({ post, currentUser, onLike, onAddComment, onVote, onDelete }) => 
   const [commentFile, setCommentFile] = useState(null);
   const [showStickers, setShowStickers] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
-  const [tearing, setTearing] = useState(false);
+  const [tearPhase, setTearPhase] = useState("idle"); // idle | shaking | tearing
+  const [postHeight, setPostHeight] = useState(0);
   const postRef = useRef(null);
   const liked = post.likes?.includes(currentUser?.uid);
 
@@ -1084,8 +1126,11 @@ const Post = ({ post, currentUser, onLike, onAddComment, onVote, onDelete }) => 
       ? "Удалить эту публикацию?"
       : "🛡 Удалить как администратор? (нарушения 18+, оскорбление религии, терроризм)";
     if (!confirm(msg)) return;
-    setTearing(true);
-    setTimeout(() => onDelete(post.id), 700);
+    // Capture height before animating
+    if (postRef.current) setPostHeight(postRef.current.offsetHeight);
+    setTearPhase("shaking");
+    setTimeout(() => setTearPhase("tearing"), 360);
+    setTimeout(() => onDelete(post.id), 1050);
   };
 
   // Normalize poll options (string or {text, votes})
@@ -1129,43 +1174,33 @@ const Post = ({ post, currentUser, onLike, onAddComment, onVote, onDelete }) => 
     setShowStickers(false);
   };
 
-  if (tearing) {
-    const inner = postRef.current;
-    const h = inner ? inner.offsetHeight : 200;
+  // ── Tear phases ──────────────────────────────────────────────────────────────
+  if (tearPhase === "tearing") {
+    const h = postHeight || 160;
+    const cardJSX = (
+      <div style={{ width: "100%", height: h }}>
+        <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg overflow-hidden" style={{ height: h }}>
+          <div className="flex items-center gap-3 p-4">
+            {post.avatar
+              ? <img src={post.avatar} alt="" className="w-10 h-10 rounded-full object-cover border-2 border-purple-200" />
+              : <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-sm">{post.username?.charAt(0)?.toUpperCase()}</div>
+            }
+            <div>
+              <p className="font-semibold text-gray-800">@{post.username}</p>
+              <p className="text-xs text-gray-400">{new Date(post.created_at).toLocaleString("ru-RU")}</p>
+            </div>
+          </div>
+          {post.content && <p className="px-4 pb-2 text-gray-800 text-sm whitespace-pre-wrap">{post.content}</p>}
+          {post.image && <img src={post.image} alt="" className="w-full max-h-40 object-cover" />}
+        </div>
+      </div>
+    );
     return (
       <>
         <style>{TEAR_CSS}</style>
-        <div style={{ position: "relative", height: h, marginBottom: 16, overflow: "visible" }}>
-          <div
-            className="post-tear-top bg-white/95 backdrop-blur rounded-2xl shadow-md overflow-hidden"
-            style={{ position: "absolute", inset: 0 }}
-          >
-            <div className="flex items-center gap-3 p-4">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-sm">
-                {post.username?.charAt(0)?.toUpperCase()}
-              </div>
-              <div>
-                <p className="font-semibold text-gray-800">@{post.username}</p>
-                <p className="text-xs text-gray-400">{new Date(post.created_at).toLocaleString("ru-RU")}</p>
-              </div>
-            </div>
-            {post.content && <p className="px-4 pb-3 text-gray-800 whitespace-pre-wrap">{post.content}</p>}
-          </div>
-          <div
-            className="post-tear-bottom bg-white/95 backdrop-blur rounded-2xl shadow-md overflow-hidden"
-            style={{ position: "absolute", inset: 0 }}
-          >
-            <div className="flex items-center gap-3 p-4">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-sm">
-                {post.username?.charAt(0)?.toUpperCase()}
-              </div>
-              <div>
-                <p className="font-semibold text-gray-800">@{post.username}</p>
-                <p className="text-xs text-gray-400">{new Date(post.created_at).toLocaleString("ru-RU")}</p>
-              </div>
-            </div>
-            {post.content && <p className="px-4 pb-3 text-gray-800 whitespace-pre-wrap">{post.content}</p>}
-          </div>
+        <div style={{ position: "relative", height: h, marginBottom: 16, overflow: "visible", pointerEvents: "none" }}>
+          <div className="post-tear-top" style={{ position: "absolute", inset: 0 }}>{cardJSX}</div>
+          <div className="post-tear-bottom" style={{ position: "absolute", inset: 0 }}>{cardJSX}</div>
         </div>
       </>
     );
@@ -1174,7 +1209,10 @@ const Post = ({ post, currentUser, onLike, onAddComment, onVote, onDelete }) => 
   return (
     <>
       <style>{TEAR_CSS}</style>
-      <div ref={postRef} className="bg-white/95 backdrop-blur rounded-2xl shadow-md mb-4 overflow-hidden">
+      <div
+        ref={postRef}
+        className={`bg-white/95 backdrop-blur rounded-2xl shadow-md mb-4 overflow-hidden${tearPhase === "shaking" ? " post-shaking" : ""}`}
+      >
       {/* Header */}
       <div className="flex items-center gap-3 p-4">
         <Link to={`/profile/${post.author_id}`}>
