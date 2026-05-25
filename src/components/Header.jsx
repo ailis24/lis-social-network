@@ -1,7 +1,66 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { notificationService } from "../services";
+import { notificationService, friendService } from "../services";
+
+function NotifItem({ n, onAccepted }) {
+  const [accepted, setAccepted] = useState(n.type === "friend_accepted");
+  const [loading, setLoading] = useState(false);
+
+  const handleAccept = async () => {
+    setLoading(true);
+    try {
+      await friendService.acceptRequest(n.sender_id);
+      setAccepted(true);
+      onAccepted(n.sender_id);
+    } catch {}
+    setLoading(false);
+  };
+
+  const icon =
+    n.type === "like"
+      ? "❤️"
+      : n.type === "comment"
+        ? "💬"
+        : n.type === "friend_request" || n.type === "friend_accepted"
+          ? "👤"
+          : "🔔";
+
+  return (
+    <div
+      className={`px-3 py-2.5 border-b border-gray-50 last:border-0 ${!n.is_read ? "bg-purple-50" : ""}`}
+    >
+      <div className="flex items-start gap-2">
+        <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-sm flex-shrink-0">
+          {icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-gray-800">
+            <span className="font-semibold">@{n.username}</span> {n.message}
+          </p>
+          <p className="text-xs text-gray-400">
+            {new Date(n.created_at).toLocaleString("ru-RU")}
+          </p>
+          {n.type === "friend_request" && !accepted && (
+            <button
+              onClick={handleAccept}
+              disabled={loading}
+              className="mt-1.5 px-3 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold rounded-full disabled:opacity-50"
+            >
+              {loading ? "..." : "✓ Принять в друзья"}
+            </button>
+          )}
+          {(n.type === "friend_accepted" ||
+            (n.type === "friend_request" && accepted)) && (
+            <span className="mt-1 inline-block text-xs text-green-600 font-semibold">
+              👫 Теперь вы друзья!
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Header() {
   const { user } = useAuth();
@@ -157,29 +216,20 @@ export default function Header() {
                     </p>
                   ) : (
                     notifications.slice(0, 20).map((n) => (
-                      <div
+                      <NotifItem
                         key={n.id}
-                        className={`flex items-start gap-2 px-3 py-2.5 border-b border-gray-50 last:border-0 ${
-                          !n.is_read ? "bg-purple-50" : ""
-                        }`}
-                      >
-                        <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-sm flex-shrink-0">
-                          {n.type === "like"
-                            ? "❤️"
-                            : n.type === "comment"
-                              ? "💬"
-                              : "👤"}
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-800">
-                            <span className="font-semibold">@{n.username}</span>{" "}
-                            {n.message}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            {new Date(n.created_at).toLocaleString("ru-RU")}
-                          </p>
-                        </div>
-                      </div>
+                        n={n}
+                        onAccepted={(senderId) => {
+                          setNotifications((prev) =>
+                            prev.map((x) =>
+                              x.sender_id === senderId &&
+                              x.type === "friend_request"
+                                ? { ...x, type: "friend_accepted" }
+                                : x,
+                            ),
+                          );
+                        }}
+                      />
                     ))
                   )}
                 </div>

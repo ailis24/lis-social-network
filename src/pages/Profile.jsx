@@ -6,8 +6,10 @@ import {
   postService,
   friendService,
   messageService,
+  callService,
 } from "../services";
 import { CameraIcon } from "@heroicons/react/24/outline";
+import CallModal from "../components/CallModal";
 
 export default function Profile() {
   const { uid: paramUid } = useParams();
@@ -23,9 +25,13 @@ export default function Profile() {
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState({ username: "", bio: "" });
   const [friendStatus, setFriendStatus] = useState("none"); // none | sent | friends
+  const [activeCall, setActiveCall] = useState(null); // { type: 'audio'|'video' }
   const [savingProfile, setSavingProfile] = useState(false);
   const [startingChat, setStartingChat] = useState(false);
   const [avatarError, setAvatarError] = useState("");
+  const [showFriendsList, setShowFriendsList] = useState(false);
+  const [friendsList, setFriendsList] = useState([]);
+  const [friendsListLoading, setFriendsListLoading] = useState(false);
 
   const load = useCallback(async () => {
     if (!uid) return;
@@ -88,13 +94,25 @@ export default function Profile() {
       await friendService.sendRequest(uid);
       setFriendStatus("sent");
     } catch (err) {
-      // Sync UI with server state if server says it already exists
       try {
         const s = await friendService.getStatus(uid);
         setFriendStatus(s.status || "sent");
       } catch {
         setFriendStatus("sent");
       }
+    }
+  };
+
+  const handleOpenFriendsList = async () => {
+    setShowFriendsList(true);
+    setFriendsListLoading(true);
+    try {
+      const list = await friendService.getList();
+      setFriendsList(list);
+    } catch {
+      setFriendsList([]);
+    } finally {
+      setFriendsListLoading(false);
     }
   };
 
@@ -206,12 +224,15 @@ export default function Profile() {
             <p className="text-2xl font-bold text-gray-800">{posts.length}</p>
             <p className="text-xs text-gray-500">Публикации</p>
           </div>
-          <div>
+          <button
+            onClick={handleOpenFriendsList}
+            className="flex flex-col items-center hover:bg-purple-50 rounded-xl py-1 transition-colors cursor-pointer"
+          >
             <p className="text-2xl font-bold text-gray-800">
               {profile.friendsCount || 0}
             </p>
-            <p className="text-xs text-gray-500">Друзья</p>
-          </div>
+            <p className="text-xs text-purple-600 font-semibold">Друзья</p>
+          </button>
           <div>
             <p className="text-2xl font-bold text-gray-800">
               {profile.followersCount || 0}
@@ -255,34 +276,124 @@ export default function Profile() {
             </button>
           </div>
         ) : (
-          <div className="flex gap-2">
-            <button
-              onClick={handleAddFriend}
-              disabled={friendStatus === "sent" || friendStatus === "friends"}
-              className={`flex-1 py-2.5 font-semibold rounded-xl transition-all ${
-                friendStatus === "sent"
-                  ? "bg-green-100 text-green-600"
+          <>
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <button
+                onClick={handleAddFriend}
+                disabled={friendStatus === "sent" || friendStatus === "friends"}
+                className={`flex-1 py-2.5 font-semibold rounded-xl transition-all ${
+                  friendStatus === "sent"
+                    ? "bg-green-100 text-green-600"
+                    : friendStatus === "friends"
+                      ? "bg-gray-100 text-gray-500"
+                      : "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:shadow-lg"
+                }`}
+              >
+                {friendStatus === "sent"
+                  ? "✓ Заявка отправлена"
                   : friendStatus === "friends"
-                    ? "bg-gray-100 text-gray-500"
-                    : "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:shadow-lg"
-              }`}
-            >
-              {friendStatus === "sent"
-                ? "✓ Заявка отправлена"
-                : friendStatus === "friends"
-                  ? "👫 В друзьях"
-                  : "👤 Добавить в друзья"}
-            </button>
-            <button
-              onClick={handleMessage}
-              disabled={startingChat}
-              className="flex-1 py-2.5 border border-purple-300 text-purple-600 font-semibold rounded-xl hover:bg-purple-50 transition-all"
-            >
-              {startingChat ? "..." : "💬 Написать"}
-            </button>
+                    ? "👫 В друзьях"
+                    : "👤 Добавить в друзья"}
+              </button>
+              <button
+                onClick={handleMessage}
+                disabled={startingChat}
+                className="flex-1 py-2.5 border border-purple-300 text-purple-600 font-semibold rounded-xl hover:bg-purple-50 transition-all"
+              >
+                {startingChat ? "..." : "💬 Написать"}
+              </button>
+            </div>
+            {/* Call buttons */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setActiveCall({ type: "audio" })}
+                className="flex-1 py-2.5 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
+              >
+                📞 Аудиозвонок
+              </button>
+              <button
+                onClick={() => setActiveCall({ type: "video" })}
+                className="flex-1 py-2.5 bg-purple-500 hover:bg-purple-600 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
+              >
+                📹 Видеозвонок
+              </button>
+            </div>
           </div>
+          {activeCall && (
+            <CallModal
+              side="caller"
+              targetId={uid}
+              targetName={`@${profile?.username || ""}`}
+              callType={activeCall.type}
+              onEnd={() => setActiveCall(null)}
+            />
+          )}
+          </>
         )}
       </div>
+
+      {/* Friends list modal */}
+      {showFriendsList && (
+        <div
+          className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center"
+          onClick={() => setShowFriendsList(false)}
+        >
+          <div
+            className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm max-h-[75vh] flex flex-col shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
+              <h3 className="text-lg font-bold text-gray-800">👫 Друзья</h3>
+              <button
+                onClick={() => setShowFriendsList(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl w-8 h-8 flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4">
+              {friendsListLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-4 border-purple-400 border-t-transparent" />
+                </div>
+              ) : friendsList.length === 0 ? (
+                <div className="text-center py-10 text-gray-400">
+                  <div className="text-4xl mb-2">👤</div>
+                  <p>Пока нет друзей</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {friendsList.map((f) => (
+                    <Link
+                      key={f.uid}
+                      to={`/profile/${f.uid}`}
+                      onClick={() => setShowFriendsList(false)}
+                      className="flex items-center gap-3 p-2 rounded-xl hover:bg-purple-50 transition-colors"
+                    >
+                      {f.avatar ? (
+                        <img
+                          src={f.avatar}
+                          alt={f.username}
+                          className="w-11 h-11 rounded-full object-cover border-2 border-purple-200"
+                        />
+                      ) : (
+                        <div className="w-11 h-11 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-lg">
+                          {f.username?.charAt(0)?.toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <p className="font-semibold text-gray-800">@{f.username}</p>
+                        {f.bio && <p className="text-xs text-gray-500 truncate max-w-[180px]">{f.bio}</p>}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Posts grid */}
       <h2 className="text-white font-bold text-lg mb-3 drop-shadow">
@@ -319,17 +430,13 @@ export default function Profile() {
                     📊 {post.poll_data.question}
                   </p>
                   {post.poll_data.options?.map((opt, i) => {
-                    const o =
-                      typeof opt === "string" ? { text: opt, votes: 0 } : opt;
+                    const o = typeof opt === "string" ? { text: opt, votes: 0 } : opt;
                     const total =
                       post.poll_data.options.reduce(
-                        (s, x) =>
-                          s + (typeof x === "string" ? 0 : x.votes || 0),
+                        (s, x) => s + (typeof x === "string" ? 0 : x.votes || 0),
                         0,
                       ) || 0;
-                    const pct = total
-                      ? Math.round(((o.votes || 0) / total) * 100)
-                      : 0;
+                    const pct = total ? Math.round(((o.votes || 0) / total) * 100) : 0;
                     return (
                       <div
                         key={i}

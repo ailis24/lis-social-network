@@ -1,7 +1,7 @@
-const { configureWorkflow } = await import('@replit/workflows');
+const { configureWorkflow } = await import("@replit/workflows");
 await configureWorkflow({
   name: "Start application",
   command: "npm run dev",
-  primary: true
+  primary: true,
 });
 console.log("Workflow configured successfully");

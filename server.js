@@ -26,9 +26,7 @@ const JWT_SECRET =
   process.env.JWT_SECRET ||
   (process.env.NODE_ENV === "production"
     ? (() => {
-        console.error(
-          "FATAL: JWT_SECRET env variable is required in production",
-        );
+        console.error("FATAL: JWT_SECRET env variable is required in production");
         process.exit(1);
       })()
     : crypto.randomBytes(64).toString("hex"));
@@ -141,6 +139,19 @@ db.exec(`
     emoji TEXT DEFAULT '💪',
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS calls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    caller_id TEXT NOT NULL,
+    callee_id TEXT NOT NULL,
+    type TEXT DEFAULT 'video',
+    status TEXT DEFAULT 'pending',
+    offer TEXT DEFAULT '',
+    answer TEXT DEFAULT '',
+    caller_ice TEXT DEFAULT '[]',
+    callee_ice TEXT DEFAULT '[]',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // Migration: add file_url to comments
@@ -218,7 +229,9 @@ app.use(
 );
 
 // CORS — restrict to known origins in production, permissive in dev
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
+const allowedOrigins = (
+  process.env.ALLOWED_ORIGINS || ""
+)
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -271,10 +284,7 @@ app.use(
     maxAge: "1d",
     setHeaders: (res) => {
       res.setHeader("X-Content-Type-Options", "nosniff");
-      res.setHeader(
-        "Content-Security-Policy",
-        "default-src 'none'; img-src 'self'; media-src 'self'",
-      );
+      res.setHeader("Content-Security-Policy", "default-src 'none'; img-src 'self'; media-src 'self'");
     },
   }),
 );
@@ -384,11 +394,7 @@ app.post("/api/auth/register", authLimiter, async (req, res) => {
         error: "Никнейм: 2-30 символов, только буквы, цифры, _ . -",
       });
     }
-    if (
-      typeof password !== "string" ||
-      password.length < 6 ||
-      password.length > 100
-    ) {
+    if (typeof password !== "string" || password.length < 6 || password.length > 100) {
       return res.status(400).json({ error: "Пароль: от 6 до 100 символов" });
     }
 
@@ -449,8 +455,7 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
       .get(normPhone);
 
     // Timing-safe: always run bcrypt to avoid leaking whether user exists
-    const dummyHash =
-      "$2a$12$abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN0pqrs";
+    const dummyHash = "$2a$12$abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN0pqrs";
     const hashToCheck = user ? user.password_hash : dummyHash;
     const validPassword = await bcrypt.compare(password, hashToCheck);
 
@@ -842,10 +847,7 @@ app.delete("/api/posts/:id", authenticateToken, (req, res) => {
     db.prepare("DELETE FROM comments WHERE post_id = ?").run(req.params.id);
     db.prepare("DELETE FROM posts WHERE id = ?").run(req.params.id);
 
-    res.json({
-      success: true,
-      deleted_by_admin: isAdmin && post.author_id !== req.user.uid,
-    });
+    res.json({ success: true, deleted_by_admin: isAdmin && post.author_id !== req.user.uid });
   } catch (error) {
     res.status(500).json({ error: "Server error" });
   }
@@ -1117,12 +1119,7 @@ app.get("/api/friends/status/:friendId", authenticateToken, (req, res) => {
         `SELECT user_id, status FROM friendships
          WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)`,
       )
-      .get(
-        req.user.uid,
-        req.params.friendId,
-        req.params.friendId,
-        req.user.uid,
-      );
+      .get(req.user.uid, req.params.friendId, req.params.friendId, req.user.uid);
     if (!row) return res.json({ status: "none" });
     if (row.status === "accepted") return res.json({ status: "friends" });
     if (row.user_id === req.user.uid) return res.json({ status: "sent" });
@@ -1152,7 +1149,7 @@ app.post("/api/friends/request", authenticateToken, (req, res) => {
 
     db.prepare(
       "INSERT INTO notifications (recipient_id, sender_id, type, message) VALUES (?, ?, 'friend_request', ?)",
-    ).run(friendId, req.user.uid, "sent you a friend request");
+    ).run(friendId, req.user.uid, "хочет добавить вас в друзья");
 
     res.json({ success: true });
   } catch (error) {
@@ -1464,6 +1461,155 @@ app.post("/api/premium/activate", authenticateToken, (req, res) => {
   }
 });
 
+// ============ CALL ROUTES (WebRTC signaling) ============
+// Clean stale pending calls every 5 minutes
+setInterval(() => {
+  try {
+    db.prepare(
+      "DELETE FROM calls WHERE status = 'pending' AND created_at < datetime('now', '-5 minutes')",
+    ).run();
+  } catch {}
+}, 5 * 60 * 1000);
+
+// Initiate a call
+app.post("/api/calls/initiate", authenticateToken, (req, res) => {
+  try {
+    const { calleeId, type } = req.body;
+    if (!calleeId) return res.status(400).json({ error: "calleeId required" });
+    const callee = db.prepare("SELECT uid FROM users WHERE uid = ?").get(calleeId);
+    if (!callee) return res.status(404).json({ error: "User not found" });
+    // Cancel any previous pending call from this caller
+    db.prepare(
+      "UPDATE calls SET status = 'ended' WHERE caller_id = ? AND status IN ('pending','active')",
+    ).run(req.user.uid);
+    const result = db
+      .prepare(
+        "INSERT INTO calls (caller_id, callee_id, type) VALUES (?, ?, ?)",
+      )
+      .run(req.user.uid, calleeId, type || "video");
+    res.json({ id: result.lastInsertRowid });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Send WebRTC offer (caller)
+app.post("/api/calls/:id/offer", authenticateToken, (req, res) => {
+  try {
+    const { offer } = req.body;
+    const call = db.prepare("SELECT * FROM calls WHERE id = ?").get(req.params.id);
+    if (!call) return res.status(404).json({ error: "Call not found" });
+    if (call.caller_id !== req.user.uid) return res.status(403).json({ error: "Forbidden" });
+    db.prepare("UPDATE calls SET offer = ?, status = 'ringing' WHERE id = ?").run(
+      JSON.stringify(offer),
+      req.params.id,
+    );
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Get call state (used for polling)
+app.get("/api/calls/:id/state", authenticateToken, (req, res) => {
+  try {
+    const call = db.prepare("SELECT * FROM calls WHERE id = ?").get(req.params.id);
+    if (!call) return res.status(404).json({ error: "Not found" });
+    if (call.caller_id !== req.user.uid && call.callee_id !== req.user.uid)
+      return res.status(403).json({ error: "Forbidden" });
+    res.json({
+      id: call.id,
+      status: call.status,
+      type: call.type,
+      offer: call.offer ? JSON.parse(call.offer) : null,
+      answer: call.answer ? JSON.parse(call.answer) : null,
+      caller_ice: JSON.parse(call.caller_ice || "[]"),
+      callee_ice: JSON.parse(call.callee_ice || "[]"),
+    });
+  } catch (e) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Incoming calls for current user
+app.get("/api/calls/incoming", authenticateToken, (req, res) => {
+  try {
+    const call = db
+      .prepare(
+        `SELECT c.*, u.username AS caller_name, u.avatar AS caller_avatar
+         FROM calls c LEFT JOIN users u ON u.uid = c.caller_id
+         WHERE c.callee_id = ? AND c.status = 'ringing'
+         ORDER BY c.created_at DESC LIMIT 1`,
+      )
+      .get(req.user.uid);
+    if (!call) return res.json({ call: null });
+    res.json({
+      call: {
+        id: call.id,
+        type: call.type,
+        callerId: call.caller_id,
+        callerName: call.caller_name,
+        callerAvatar: call.caller_avatar,
+        offer: call.offer ? JSON.parse(call.offer) : null,
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Answer a call (callee)
+app.post("/api/calls/:id/answer", authenticateToken, (req, res) => {
+  try {
+    const { answer } = req.body;
+    const call = db.prepare("SELECT * FROM calls WHERE id = ?").get(req.params.id);
+    if (!call) return res.status(404).json({ error: "Not found" });
+    if (call.callee_id !== req.user.uid) return res.status(403).json({ error: "Forbidden" });
+    db.prepare("UPDATE calls SET answer = ?, status = 'active' WHERE id = ?").run(
+      JSON.stringify(answer),
+      req.params.id,
+    );
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Send ICE candidate
+app.post("/api/calls/:id/ice", authenticateToken, (req, res) => {
+  try {
+    const { candidate, side } = req.body; // side: 'caller' | 'callee'
+    const call = db.prepare("SELECT * FROM calls WHERE id = ?").get(req.params.id);
+    if (!call) return res.status(404).json({ error: "Not found" });
+    const field = side === "caller" ? "caller_ice" : "callee_ice";
+    const existing = JSON.parse(call[field] || "[]");
+    existing.push(candidate);
+    db.prepare(`UPDATE calls SET ${field} = ? WHERE id = ?`).run(
+      JSON.stringify(existing),
+      req.params.id,
+    );
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// End / decline call
+app.post("/api/calls/:id/end", authenticateToken, (req, res) => {
+  try {
+    const call = db.prepare("SELECT * FROM calls WHERE id = ?").get(req.params.id);
+    if (!call) return res.status(404).json({ error: "Not found" });
+    if (call.caller_id !== req.user.uid && call.callee_id !== req.user.uid)
+      return res.status(403).json({ error: "Forbidden" });
+    const status = req.body?.decline ? "declined" : "ended";
+    db.prepare("UPDATE calls SET status = ? WHERE id = ?").run(status, req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ============ CHALLENGE ROUTES ============
 // User-created exercise prompts that get randomly assigned to others
 app.get("/api/challenges/random", authenticateToken, (req, res) => {
@@ -1497,11 +1643,7 @@ app.post("/api/challenges", authenticateToken, (req, res) => {
         "INSERT INTO challenges (author_id, text, emoji) VALUES (?, ?, ?)",
       )
       .run(req.user.uid, cleanText, cleanEmoji);
-    res.json({
-      id: result.lastInsertRowid,
-      text: cleanText,
-      emoji: cleanEmoji,
-    });
+    res.json({ id: result.lastInsertRowid, text: cleanText, emoji: cleanEmoji });
   } catch (error) {
     console.error("Create challenge error:", error);
     res.status(500).json({ error: "Server error" });
@@ -1550,9 +1692,7 @@ app.use("/api", (req, res) => {
 app.use((err, req, res, next) => {
   if (err && err.name === "MulterError") {
     if (err.code === "LIMIT_FILE_SIZE") {
-      return res
-        .status(413)
-        .json({ error: "Файл слишком большой (макс 50 МБ)" });
+      return res.status(413).json({ error: "Файл слишком большой (макс 50 МБ)" });
     }
     return res.status(400).json({ error: "Ошибка загрузки файла" });
   }

@@ -73,7 +73,9 @@ const PremiumModal = ({ onClose, onActivated }) => {
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl">
         <div className="text-5xl mb-3">💎</div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">Lis Премиум</h2>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">
+          Lis Премиум
+        </h2>
         <p className="text-gray-600 text-sm mb-4">
           Отключи таймер ленты на 30 дней.
         </p>
@@ -155,10 +157,11 @@ const StoryRecorder = ({ onClose, onUploaded }) => {
     return () => {
       alive = false;
       if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
-      if (recorderRef.current && recorderRef.current.state !== "inactive") {
-        try {
-          recorderRef.current.stop();
-        } catch {}
+      if (
+        recorderRef.current &&
+        recorderRef.current.state !== "inactive"
+      ) {
+        try { recorderRef.current.stop(); } catch {}
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
@@ -279,7 +282,9 @@ const StoryRecorder = ({ onClose, onUploaded }) => {
             aria-label="Остановить запись"
           />
         )}
-        {phase === "uploading" && <p className="text-white">Загружаем...</p>}
+        {phase === "uploading" && (
+          <p className="text-white">Загружаем...</p>
+        )}
         {phase === "error" && (
           <div className="text-center">
             <p className="text-red-300 mb-2">{error}</p>
@@ -304,7 +309,10 @@ const StoriesBar = ({ currentUser }) => {
   const [showRecorder, setShowRecorder] = useState(false);
   const [showChooser, setShowChooser] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [storyProgress, setStoryProgress] = useState(0);
   const fileRef = useRef();
+  const progressRef = useRef(null);
+  const STORY_DURATION = 5000; // 5 seconds per image
 
   const loadStories = () => {
     storyService
@@ -391,12 +399,37 @@ const StoriesBar = ({ currentUser }) => {
   const openViewer = (group) => {
     setViewing(group);
     setActiveIdx(0);
+    setStoryProgress(0);
   };
 
   const currentItem = viewing?.items?.[activeIdx];
 
+  // Auto-advance timer for image stories
+  useEffect(() => {
+    if (!viewing || !currentItem) return;
+    if (currentItem.media_type === "video") return; // video advances on onEnded
+    clearInterval(progressRef.current);
+    setStoryProgress(0);
+    const start = Date.now();
+    progressRef.current = setInterval(() => {
+      const elapsed = Date.now() - start;
+      const pct = Math.min((elapsed / STORY_DURATION) * 100, 100);
+      setStoryProgress(pct);
+      if (elapsed >= STORY_DURATION) {
+        clearInterval(progressRef.current);
+        setActiveIdx((i) => {
+          if (i + 1 < viewing.items.length) return i + 1;
+          setViewing(null);
+          return i;
+        });
+      }
+    }, 50);
+    return () => clearInterval(progressRef.current);
+  }, [viewing, activeIdx]);
+
   return (
-    <div className="bg-white/90 backdrop-blur rounded-2xl shadow mb-4 p-3">
+    <>
+    <div className="bg-white/95 rounded-2xl shadow mb-4 p-3">
       <div className="flex gap-3 overflow-x-auto scrollbar-hide">
         {/* Add story button */}
         <button
@@ -484,58 +517,69 @@ const StoriesBar = ({ currentUser }) => {
         />
       )}
 
-      {/* Story viewer modal */}
+      {/* Story viewer — FULLSCREEN */}
       {viewing && currentItem && (
-        <div
-          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center"
-          onClick={() => setViewing(null)}
-        >
-          <div
-            className="relative max-w-sm w-full mx-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Progress dots */}
-            <div className="flex gap-1 mb-2">
-              {viewing.items.map((_, i) => (
+        <div className="fixed inset-0 bg-black z-50 flex flex-col select-none">
+
+          {/* Progress bars */}
+          <div className="flex gap-1 px-3 pt-10 pb-1 safe-area-top">
+            {viewing.items.map((_, i) => (
+              <div key={i} className="h-0.5 flex-1 rounded-full bg-white/30 overflow-hidden">
                 <div
-                  key={i}
-                  className={`h-1 flex-1 rounded-full ${
-                    i === activeIdx ? "bg-white" : "bg-white/30"
-                  }`}
+                  className="h-full bg-white rounded-full"
+                  style={{
+                    width: i < activeIdx ? "100%" : i === activeIdx ? `${storyProgress}%` : "0%",
+                    transition: i === activeIdx ? "none" : "none",
+                  }}
                 />
-              ))}
-            </div>
-            <div className="text-white text-sm mb-2 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <img
-                  src={viewing.avatar || "/fox.gif"}
-                  alt=""
-                  className="w-8 h-8 rounded-full object-cover"
-                />
-                <span className="font-semibold">@{viewing.username}</span>
-                <span className="text-xs text-white/60">
-                  · ⏳ {formatRemaining(currentItem.expires_at)}
-                </span>
               </div>
-              <button
-                onClick={() => setViewing(null)}
-                className="text-white text-2xl px-2"
-              >
-                ✕
-              </button>
+            ))}
+          </div>
+
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-2">
+            <div className="flex items-center gap-2">
+              <img
+                src={viewing.avatar || "/fox.gif"}
+                alt=""
+                className="w-9 h-9 rounded-full object-cover border-2 border-white/40"
+              />
+              <div>
+                <p className="text-white font-semibold text-sm leading-tight">@{viewing.username}</p>
+                <p className="text-white/60 text-xs">⏳ {formatRemaining(currentItem.expires_at)}</p>
+              </div>
             </div>
+            <button
+              onClick={() => { clearInterval(progressRef.current); setViewing(null); }}
+              className="w-9 h-9 flex items-center justify-center text-white text-2xl"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Content — tap left/right to navigate */}
+          <div
+            className="flex-1 relative overflow-hidden"
+            onClick={(e) => {
+              const x = e.clientX;
+              const w = window.innerWidth;
+              if (x < w * 0.35) {
+                setActiveIdx((i) => Math.max(0, i - 1));
+              } else {
+                if (activeIdx + 1 < viewing.items.length) setActiveIdx((i) => i + 1);
+                else { clearInterval(progressRef.current); setViewing(null); }
+              }
+            }}
+          >
             {currentItem.media_type === "video" ? (
               <video
                 key={currentItem.id}
                 autoPlay
-                controls
-                className="w-full rounded-xl"
+                playsInline
+                className="w-full h-full object-contain"
                 onEnded={() => {
-                  if (activeIdx + 1 < viewing.items.length) {
-                    setActiveIdx(activeIdx + 1);
-                  } else {
-                    setViewing(null);
-                  }
+                  if (activeIdx + 1 < viewing.items.length) setActiveIdx((i) => i + 1);
+                  else { clearInterval(progressRef.current); setViewing(null); }
                 }}
               >
                 <source src={currentItem.media_url} />
@@ -544,43 +588,31 @@ const StoriesBar = ({ currentUser }) => {
               <img
                 src={currentItem.media_url}
                 alt="Story"
-                className="w-full rounded-xl"
+                className="w-full h-full object-contain"
                 loading="lazy"
               />
             )}
 
-            {/* Nav + delete */}
-            <div className="flex justify-between items-center mt-3">
+            {/* Tap zones hint (invisible) */}
+            <div className="absolute inset-y-0 left-0 w-1/3" />
+            <div className="absolute inset-y-0 right-0 w-1/3" />
+          </div>
+
+          {/* Bottom: delete button */}
+          <div className="flex justify-center pb-8 pt-3">
+            {(viewing.user_id === currentUser?.uid || currentUser?.is_admin) && (
               <button
-                onClick={() => setActiveIdx((i) => Math.max(0, i - 1))}
-                disabled={activeIdx === 0}
-                className="text-white/80 disabled:opacity-30 px-3 py-1"
+                onClick={(e) => { e.stopPropagation(); handleStoryDelete(currentItem.id); }}
+                className="text-red-300 hover:text-red-400 text-sm bg-black/30 px-4 py-2 rounded-full"
               >
-                ‹ Пред
+                🗑 Удалить сторис
               </button>
-              {(viewing.user_id === currentUser?.uid ||
-                currentUser?.is_admin) && (
-                <button
-                  onClick={() => handleStoryDelete(currentItem.id)}
-                  className="text-red-300 hover:text-red-400 text-sm"
-                >
-                  🗑 Удалить
-                </button>
-              )}
-              <button
-                onClick={() =>
-                  setActiveIdx((i) => Math.min(viewing.items.length - 1, i + 1))
-                }
-                disabled={activeIdx >= viewing.items.length - 1}
-                className="text-white/80 disabled:opacity-30 px-3 py-1"
-              >
-                След ›
-              </button>
-            </div>
+            )}
           </div>
         </div>
       )}
     </div>
+    </>
   );
 };
 
@@ -689,10 +721,7 @@ const ExerciseModal = ({ onDone }) => {
       ];
       const mime =
         mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || "";
-      const recorder = new MediaRecorder(
-        stream,
-        mime ? { mimeType: mime } : {},
-      );
+      const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
       chunksRef.current = [];
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
@@ -781,8 +810,8 @@ const ExerciseModal = ({ onDone }) => {
         {phase === "idle" && (
           <>
             <p className="text-sm text-gray-500 mb-4">
-              Нажми кнопку — мы запишем видео твоей тренировки и опубликуем его
-              в ленту, чтобы разблокировать её.
+              Нажми кнопку — мы запишем видео твоей тренировки и опубликуем его в
+              ленту, чтобы разблокировать её.
             </p>
             <button
               onClick={startRecording}
@@ -1025,14 +1054,7 @@ const FeedLocked = ({ lockUntil, onUnlock }) => {
 };
 
 // ─── Post Component ────────────────────────────────────────────────────────────
-const Post = ({
-  post,
-  currentUser,
-  onLike,
-  onAddComment,
-  onVote,
-  onDelete,
-}) => {
+const Post = ({ post, currentUser, onLike, onAddComment, onVote, onDelete }) => {
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
@@ -1163,9 +1185,7 @@ const Post = ({
             📊 {post.poll_data.question}
           </p>
           {pollOptions.map((opt, i) => {
-            const pct = totalVotes
-              ? Math.round((opt.votes / totalVotes) * 100)
-              : 0;
+            const pct = totalVotes ? Math.round((opt.votes / totalVotes) * 100) : 0;
             const isMy = userVoted && myVote === i;
             return (
               <button
@@ -1245,10 +1265,7 @@ const Post = ({
             >
               😊
             </button>
-            <label
-              className="cursor-pointer text-gray-400 hover:text-purple-500"
-              title="Прикрепить файл"
-            >
+            <label className="cursor-pointer text-gray-400 hover:text-purple-500" title="Прикрепить файл">
               📎
               <input
                 type="file"
@@ -1329,18 +1346,16 @@ const Post = ({
                       className="mt-2 rounded-lg max-h-48"
                     />
                   )}
-                  {c.file_url &&
-                    c.file_type !== "image" &&
-                    c.file_type !== "video" && (
-                      <a
-                        href={c.file_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-2 inline-block text-xs text-purple-600 hover:underline"
-                      >
-                        📎 Скачать файл
-                      </a>
-                    )}
+                  {c.file_url && c.file_type !== "image" && c.file_type !== "video" && (
+                    <a
+                      href={c.file_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-block text-xs text-purple-600 hover:underline"
+                    >
+                      📎 Скачать файл
+                    </a>
+                  )}
                 </div>
               </div>
             ))}
@@ -1352,6 +1367,163 @@ const Post = ({
 };
 
 // ─── Create Post ───────────────────────────────────────────────────────────────
+const GraffitiModal = ({ onClose, onPost }) => {
+  const canvasRef = useRef(null);
+  const [drawing, setDrawing] = useState(false);
+  const [color, setColor] = useState("#7c3aed");
+  const [size, setSize] = useState(4);
+  const [tool, setTool] = useState("pen"); // pen | eraser
+  const lastPos = useRef(null);
+
+  const getPos = (e) => {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    // Scale from CSS pixels to canvas internal resolution
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (src.clientX - rect.left) * scaleX,
+      y: (src.clientY - rect.top) * scaleY,
+    };
+  };
+
+  const startDraw = (e) => {
+    e.preventDefault();
+    setDrawing(true);
+    lastPos.current = getPos(e);
+  };
+
+  const draw = (e) => {
+    e.preventDefault();
+    if (!drawing) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(lastPos.current.x, lastPos.current.y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.strokeStyle = tool === "eraser" ? "#ffffff" : color;
+    ctx.lineWidth = tool === "eraser" ? size * 4 : size;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.stroke();
+    lastPos.current = pos;
+  };
+
+  const stopDraw = () => {
+    setDrawing(false);
+    lastPos.current = null;
+  };
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }, []);
+
+  const submit = () => {
+    canvasRef.current.toBlob((blob) => {
+      const file = new File([blob], `graffiti-${Date.now()}.png`, {
+        type: "image/png",
+      });
+      onPost(file);
+    }, "image/png");
+  };
+
+  const COLORS = [
+    "#7c3aed", "#ec4899", "#ef4444", "#f97316",
+    "#eab308", "#22c55e", "#06b6d4", "#3b82f6",
+    "#6366f1", "#000000",
+  ];
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col gap-3 p-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-gray-800 text-lg">🎨 Граффити-стена</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">✕</button>
+        </div>
+
+        {/* Color palette */}
+        <div className="flex gap-2 flex-wrap">
+          {COLORS.map((c) => (
+            <button
+              key={c}
+              onClick={() => { setColor(c); setTool("pen"); }}
+              className={`w-7 h-7 rounded-full border-2 transition-transform ${color === c && tool === "pen" ? "border-gray-700 scale-125" : "border-transparent"}`}
+              style={{ background: c }}
+            />
+          ))}
+          <button
+            onClick={() => setTool("eraser")}
+            className={`px-2 h-7 rounded-full text-xs font-bold border-2 transition-colors ${tool === "eraser" ? "border-purple-500 bg-purple-50 text-purple-700" : "border-gray-200 text-gray-500"}`}
+          >
+            ◻ Стёрка
+          </button>
+        </div>
+
+        {/* Brush size */}
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500">Размер:</span>
+          {[2, 4, 8, 14].map((s) => (
+            <button
+              key={s}
+              onClick={() => setSize(s)}
+              className={`rounded-full flex items-center justify-center border-2 transition ${size === s ? "border-purple-500" : "border-gray-200"}`}
+              style={{ width: s * 3 + 12, height: s * 3 + 12 }}
+            >
+              <div className="rounded-full bg-gray-700" style={{ width: s, height: s }} />
+            </button>
+          ))}
+          <button onClick={clearCanvas} className="ml-auto text-xs text-red-400 hover:text-red-600 font-semibold">
+            🗑 Очистить
+          </button>
+        </div>
+
+        {/* Canvas */}
+        <canvas
+          ref={canvasRef}
+          width={380}
+          height={240}
+          className="rounded-xl border border-gray-200 touch-none w-full cursor-crosshair"
+          style={{ touchAction: "none" }}
+          onMouseDown={startDraw}
+          onMouseMove={draw}
+          onMouseUp={stopDraw}
+          onMouseLeave={stopDraw}
+          onTouchStart={startDraw}
+          onTouchMove={draw}
+          onTouchEnd={stopDraw}
+        />
+
+        <div className="flex gap-2 mt-1">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 border border-gray-200 text-gray-500 rounded-xl text-sm font-semibold hover:bg-gray-50"
+          >
+            Отмена
+          </button>
+          <button
+            onClick={submit}
+            className="flex-1 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl text-sm font-semibold hover:shadow-lg transition-all"
+          >
+            🚀 Опубликовать
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const CreatePost = ({ currentUser, onCreated }) => {
   const [content, setContent] = useState("");
   const [file, setFile] = useState(null);
@@ -1437,11 +1609,7 @@ const CreatePost = ({ currentUser, onCreated }) => {
           {file && (
             <div className="mt-2 flex items-center gap-2 text-sm text-purple-600 bg-purple-50 rounded-lg px-3 py-2">
               <span>
-                {fileKind === "image"
-                  ? "📷"
-                  : fileKind === "video"
-                    ? "🎥"
-                    : "📎"}{" "}
+                {fileKind === "image" ? "📷" : fileKind === "video" ? "🎥" : "📎"}{" "}
                 {file.name}
               </span>
               <button
@@ -1457,9 +1625,7 @@ const CreatePost = ({ currentUser, onCreated }) => {
           {showPoll && (
             <div className="mt-3 bg-purple-50 rounded-xl p-3 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-purple-700">
-                  📊 Опрос
-                </span>
+                <span className="text-xs font-semibold text-purple-700">📊 Опрос</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -1515,57 +1681,31 @@ const CreatePost = ({ currentUser, onCreated }) => {
             </div>
           )}
 
-          <div className="flex items-center justify-between mt-3">
-            <div className="flex gap-3 items-center">
-              <label
-                className="cursor-pointer text-gray-400 hover:text-purple-500"
-                title="Фото"
-              >
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center gap-3">
+              <label className="cursor-pointer text-gray-400 hover:text-purple-500" title="Фото">
                 <PhotoIcon className="w-6 h-6" />
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => setFile(e.target.files[0] || null)}
-                />
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => setFile(e.target.files[0] || null)} />
               </label>
-              <label
-                className="cursor-pointer text-gray-400 hover:text-purple-500"
-                title="Видео"
-              >
+              <label className="cursor-pointer text-gray-400 hover:text-purple-500" title="Видео">
                 <VideoCameraIcon className="w-6 h-6" />
-                <input
-                  type="file"
-                  accept="video/*"
-                  className="hidden"
-                  onChange={(e) => setFile(e.target.files[0] || null)}
-                />
+                <input type="file" accept="video/*" className="hidden" onChange={(e) => setFile(e.target.files[0] || null)} />
               </label>
-              <label
-                className="cursor-pointer text-gray-400 hover:text-purple-500 text-xl"
-                title="Любой файл"
-              >
+              <label className="cursor-pointer text-gray-400 hover:text-purple-500 text-xl" title="Любой файл">
                 📎
-                <input
-                  type="file"
-                  className="hidden"
-                  onChange={(e) => setFile(e.target.files[0] || null)}
-                />
+                <input type="file" className="hidden" onChange={(e) => setFile(e.target.files[0] || null)} />
               </label>
-              <button
-                type="button"
-                onClick={() => setShowPoll((s) => !s)}
-                className={`text-xl ${showPoll ? "text-purple-600" : "text-gray-400 hover:text-purple-500"}`}
-                title="Опрос"
-              >
+              <button type="button" onClick={() => setShowPoll((s) => !s)}
+                className={`text-xl ${showPoll ? "text-purple-600" : "text-gray-400 hover:text-purple-500"}`} title="Опрос">
                 📊
               </button>
+              <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("lis:open-graffiti"))}
+                className="text-xl text-gray-400 hover:text-purple-500 transition-colors" title="Граффити">
+                🎨
+              </button>
             </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-2 rounded-full font-semibold text-sm hover:shadow-lg disabled:opacity-50 transition-all"
-            >
+            <button type="submit" disabled={loading}
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2.5 rounded-full font-semibold text-sm hover:shadow-lg disabled:opacity-50 transition-all">
               {loading ? "Публикую..." : "Опубликовать"}
             </button>
           </div>
@@ -1597,6 +1737,15 @@ export default function Feed() {
 
   // Challenge creation modal
   const [showChallengeModal, setShowChallengeModal] = useState(false);
+
+  // Graffiti
+  const [showGraffiti, setShowGraffiti] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setShowGraffiti(true);
+    window.addEventListener("lis:open-graffiti", handler);
+    return () => window.removeEventListener("lis:open-graffiti", handler);
+  }, []);
 
   useEffect(() => {
     premiumService
@@ -1762,12 +1911,7 @@ export default function Feed() {
       {/* Premium banner / Timer progress bar */}
       {premium ? (
         <div className="mb-3 flex items-center justify-between bg-gradient-to-r from-purple-500/30 to-pink-500/30 backdrop-blur rounded-xl px-3 py-2 text-white text-xs">
-          <span>
-            💎 Премиум активен
-            {premiumUntil
-              ? ` до ${new Date(premiumUntil).toLocaleDateString("ru-RU")}`
-              : ""}
-          </span>
+          <span>💎 Премиум активен{premiumUntil ? ` до ${new Date(premiumUntil).toLocaleDateString("ru-RU")}` : ""}</span>
           <button
             onClick={() => setShowChallengeModal(true)}
             className="text-pink-200 font-semibold hover:text-pink-100"
@@ -1775,38 +1919,36 @@ export default function Feed() {
             ✏ Задание
           </button>
         </div>
-      ) : (
-        !locked && (
-          <div className="mb-3">
-            <div className="flex justify-between items-center text-xs text-white/70 mb-1 gap-2">
-              <span>
-                ⏱ {timerMins}:{timerSecs.toString().padStart(2, "0")}
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowChallengeModal(true)}
-                  className="text-pink-200 font-semibold hover:text-pink-100"
-                  title="Придумать задание для других"
-                >
-                  ✏ Задание
-                </button>
-                <button
-                  onClick={() => setShowPremiumModal(true)}
-                  className="text-yellow-200 font-semibold hover:text-yellow-100"
-                >
-                  💎 Премиум
-                </button>
-              </div>
-              <span>10:00</span>
+      ) : !locked && (
+        <div className="mb-3">
+          <div className="flex justify-between items-center text-xs text-white/70 mb-1 gap-2">
+            <span>
+              ⏱ {timerMins}:{timerSecs.toString().padStart(2, "0")}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowChallengeModal(true)}
+                className="text-pink-200 font-semibold hover:text-pink-100"
+                title="Придумать задание для других"
+              >
+                ✏ Задание
+              </button>
+              <button
+                onClick={() => setShowPremiumModal(true)}
+                className="text-yellow-200 font-semibold hover:text-yellow-100"
+              >
+                💎 Премиум
+              </button>
             </div>
-            <div className="h-1.5 bg-white/30 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-purple-300 to-pink-400 transition-all duration-1000"
-                style={{ width: `${timerPercent}%` }}
-              />
-            </div>
+            <span>10:00</span>
           </div>
-        )
+          <div className="h-1.5 bg-white/30 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-purple-300 to-pink-400 transition-all duration-1000"
+              style={{ width: `${timerPercent}%` }}
+            />
+          </div>
+        </div>
       )}
 
       {/* Modals */}
@@ -1823,6 +1965,20 @@ export default function Feed() {
       {showChallengeModal && (
         <CreateChallengeModal onClose={() => setShowChallengeModal(false)} />
       )}
+      {showGraffiti && (
+        <GraffitiModal
+          onClose={() => setShowGraffiti(false)}
+          onPost={async (file) => {
+            setShowGraffiti(false);
+            try {
+              await postService.createPost("", null, null, null, file);
+              loadFeed();
+            } catch (e) {
+              console.error(e);
+            }
+          }}
+        />
+      )}
 
       {locked ? (
         <FeedLocked lockUntil={lockUntil} onUnlock={handleUnlock} />
@@ -1832,8 +1988,7 @@ export default function Feed() {
           <CreatePost currentUser={user} onCreated={loadFeed} />
 
           {posts.length === 0 ? (
-            <div className="text-center py-16 text-white">
-              <div className="text-5xl mb-3">🦊</div>
+            <div className="flex flex-col items-center py-16 text-white">
               <p className="text-xl font-semibold">Лента пуста</p>
               <p className="text-white/70 mt-1">
                 Будь первым, кто что-то опубликует!

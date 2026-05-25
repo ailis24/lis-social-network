@@ -26,9 +26,9 @@ function killPort(port) {
               process.kill(parseInt(pid), 9);
               console.log(`Killed PID ${pid} on port ${port}`);
             }
-          } catch {}
+          } catch { }
         }
-      } catch {}
+      } catch { }
     }
   } catch (e) {
     console.error("killport error:", e.message);

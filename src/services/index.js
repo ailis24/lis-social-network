@@ -282,6 +282,14 @@ export const friendService = {
     if (!res.ok) throw new Error("Accept failed");
     return await res.json();
   },
+
+  getList: async () => {
+    const res = await fetch(`${API_URL}/api/friends`, {
+      headers: getAuthHeader(),
+    });
+    if (!res.ok) throw new Error("Friends list failed");
+    return await res.json();
+  },
 };
 
 export const storyService = {
@@ -364,6 +372,74 @@ export const timerService = {
     });
     if (!res.ok) throw new Error("Lock failed");
     return await res.json();
+  },
+};
+
+export const callService = {
+  initiate: async (calleeId, type = "video") => {
+    const res = await fetch(`${API_URL}/api/calls/initiate`, {
+      method: "POST",
+      headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+      body: JSON.stringify({ calleeId, type }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Call failed");
+    return data;
+  },
+
+  sendOffer: async (callId, offer) => {
+    const res = await fetch(`${API_URL}/api/calls/${callId}/offer`, {
+      method: "POST",
+      headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+      body: JSON.stringify({ offer }),
+    });
+    if (!res.ok) throw new Error("Offer failed");
+    return await res.json();
+  },
+
+  getState: async (callId) => {
+    const res = await fetch(`${API_URL}/api/calls/${callId}/state`, {
+      headers: getAuthHeader(),
+    });
+    if (!res.ok) throw new Error("State failed");
+    return await res.json();
+  },
+
+  getIncoming: async () => {
+    const res = await fetch(`${API_URL}/api/calls/incoming`, {
+      headers: getAuthHeader(),
+    });
+    if (!res.ok) return { call: null };
+    return await res.json();
+  },
+
+  sendAnswer: async (callId, answer) => {
+    const res = await fetch(`${API_URL}/api/calls/${callId}/answer`, {
+      method: "POST",
+      headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+      body: JSON.stringify({ answer }),
+    });
+    if (!res.ok) throw new Error("Answer failed");
+    return await res.json();
+  },
+
+  sendIce: async (callId, candidate, side) => {
+    const res = await fetch(`${API_URL}/api/calls/${callId}/ice`, {
+      method: "POST",
+      headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+      body: JSON.stringify({ candidate, side }),
+    });
+    if (!res.ok) throw new Error("ICE failed");
+    return await res.json();
+  },
+
+  end: async (callId, decline = false) => {
+    const res = await fetch(`${API_URL}/api/calls/${callId}/end`, {
+      method: "POST",
+      headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+      body: JSON.stringify({ decline }),
+    });
+    return await res.json().catch(() => ({}));
   },
 };
 

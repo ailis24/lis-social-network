@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { messageService, userService } from "../services";
+import { messageService, userService, callService } from "../services";
 import StickerPicker from "../components/StickerPicker";
+import CallModal from "../components/CallModal";
 import {
   PaperClipIcon,
   UserPlusIcon,
@@ -76,13 +77,7 @@ const MessageBubble = ({ message, isOwn, onDelete }) => (
   </div>
 );
 
-const ConversationItem = ({
-  conv,
-  isActive,
-  onClick,
-  currentUserId,
-  onDelete,
-}) => {
+const ConversationItem = ({ conv, isActive, onClick, currentUserId, onDelete }) => {
   const [otherUser, setOtherUser] = useState(null);
 
   useEffect(() => {
@@ -303,6 +298,7 @@ export default function Messages() {
 
   const [conversations, setConversations] = useState([]);
   const [selectedConv, setSelectedConv] = useState(null);
+  const [activeCall, setActiveCall] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState("");
   const [attachment, setAttachment] = useState(null);
@@ -566,6 +562,34 @@ export default function Messages() {
                   {selectedConv.participants?.length} уч.
                 </span>
               </p>
+              {selectedConv?.type !== "group" && (
+                <>
+                  <button
+                    onClick={() => {
+                      const other = selectedConv.participants?.find(
+                        (p) => p !== user?.uid,
+                      );
+                      if (other) setActiveCall({ type: "audio", targetId: other });
+                    }}
+                    title="Аудиозвонок"
+                    className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-all text-base"
+                  >
+                    📞
+                  </button>
+                  <button
+                    onClick={() => {
+                      const other = selectedConv.participants?.find(
+                        (p) => p !== user?.uid,
+                      );
+                      if (other) setActiveCall({ type: "video", targetId: other });
+                    }}
+                    title="Видеозвонок"
+                    className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-all text-base"
+                  >
+                    📹
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => setShowAddModal(true)}
                 title="Добавить участника"
@@ -608,10 +632,7 @@ export default function Messages() {
                   </button>
                 </div>
               )}
-              <form
-                onSubmit={sendMessage}
-                className="relative flex items-center gap-2"
-              >
+              <form onSubmit={sendMessage} className="relative flex items-center gap-2">
                 {showStickers && (
                   <StickerPicker
                     onPick={(s) => {
@@ -682,6 +703,15 @@ export default function Messages() {
           onClose={() => setShowAddModal(false)}
           onConfirm={handleAddParticipant}
           excludeIds={selectedConv.participants || []}
+        />
+      )}
+      {activeCall && (
+        <CallModal
+          side="caller"
+          targetId={activeCall.targetId}
+          targetName={activeCall.targetName || "Собеседник"}
+          callType={activeCall.type}
+          onEnd={() => setActiveCall(null)}
         />
       )}
     </div>
