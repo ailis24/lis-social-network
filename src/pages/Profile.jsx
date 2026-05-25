@@ -308,6 +308,7 @@ export default function Profile() {
 
         {/* Action buttons */}
         {isOwn ? (
+          <>
           <div className="flex flex-col gap-2">
             {editing ? (
               <div className="flex gap-2">
@@ -376,6 +377,7 @@ export default function Profile() {
               )}
             </div>
           )}
+          </>
         ) : (
           <>
           <div className="flex flex-col gap-2">
