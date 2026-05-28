@@ -1,5 +1,45 @@
 @import url('https://fonts.googleapis.com/css2?family=Parisienne&display=swap');
 
+/* ── Premium avatar styles ── */
+.premium-avatar-ring {
+  border: 3px solid gold !important;
+  box-shadow: 0 0 16px rgba(255, 215, 0, 0.55), 0 0 4px rgba(255, 215, 0, 0.3);
+}
+
+.crown-badge {
+  position: absolute;
+  top: -10px;
+  right: -8px;
+  font-size: 20px;
+  z-index: 10;
+  animation: crownGlow 2s ease-in-out infinite;
+  filter: drop-shadow(0 0 4px gold);
+}
+
+@keyframes crownGlow {
+  0%, 100% { filter: drop-shadow(0 0 5px gold); transform: scale(1); }
+  50% { filter: drop-shadow(0 0 14px gold); transform: scale(1.08); }
+}
+
+.premium-post-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #b45309;
+  background: linear-gradient(90deg, #fef3c7, #fde68a);
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+
+/* Green read receipt for premium messages */
+.msg-read-premium {
+  color: #22c55e;
+  font-weight: 600;
+  font-size: 11px;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

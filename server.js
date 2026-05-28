@@ -222,6 +222,27 @@ try {
   console.error("Admin promote error:", e);
 }
 
+// Migration: add profile_views table
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS profile_views (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    viewer_id TEXT NOT NULL,
+    profile_id TEXT NOT NULL,
+    viewed_at TEXT DEFAULT (datetime('now'))
+  )`);
+} catch (e) { console.error("Profile views migration:", e); }
+
+// Migration: add story_views table
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS story_views (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    viewer_id TEXT NOT NULL,
+    story_id INTEGER NOT NULL,
+    viewed_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(viewer_id, story_id)
+  )`);
+} catch (e) { console.error("Story views migration:", e); }
+
 console.log("✅ SQLite database ready");
 console.log("========================================");
 console.log(`🚀 Lis API server will run on port ${PORT}`);
@@ -562,6 +583,20 @@ app.get("/api/users/:uid", authenticateToken, (req, res) => {
 
     const isPremiumActive = hasPremium(user.uid);
 
+    // Record profile view if viewer != target and target has premium
+    if (req.user.uid !== req.params.uid && isPremiumActive) {
+      try {
+        const recent = db.prepare(
+          "SELECT id FROM profile_views WHERE viewer_id = ? AND profile_id = ? AND viewed_at > datetime('now', '-1 hour')"
+        ).get(req.user.uid, req.params.uid);
+        if (!recent) {
+          db.prepare(
+            "INSERT INTO profile_views (viewer_id, profile_id) VALUES (?, ?)"
+          ).run(req.user.uid, req.params.uid);
+        }
+      } catch (_) {}
+    }
+
     const response = {
       uid: user.uid,
       username: user.username,
@@ -580,6 +615,26 @@ app.get("/api/users/:uid", authenticateToken, (req, res) => {
     }
 
     res.json(response);
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Get profile views (only for the profile owner)
+app.get("/api/users/:uid/views", authenticateToken, (req, res) => {
+  try {
+    if (req.user.uid !== req.params.uid) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const views = db.prepare(`
+      SELECT pv.id, pv.viewer_id, pv.viewed_at, u.username, u.avatar
+      FROM profile_views pv
+      JOIN users u ON pv.viewer_id = u.uid
+      WHERE pv.profile_id = ?
+      ORDER BY pv.viewed_at DESC
+      LIMIT 100
+    `).all(req.params.uid);
+    res.json(views);
   } catch (error) {
     res.status(500).json({ error: "Server error" });
   }
@@ -644,10 +699,12 @@ app.get("/api/posts", authenticateToken, (req, res) => {
   try {
     const posts = db
       .prepare(
-        `SELECT p.*, u.username, u.avatar as author_avatar 
+        `SELECT p.*, u.username, u.avatar as author_avatar,
+          CASE WHEN s.expires_at > datetime('now') THEN 1 ELSE 0 END as author_is_premium
          FROM posts p 
          JOIN users u ON p.author_id = u.uid 
-         ORDER BY p.created_at DESC LIMIT 50`,
+         LEFT JOIN subscriptions s ON p.author_id = s.user_id AND s.expires_at > datetime('now')
+         ORDER BY author_is_premium DESC, p.created_at DESC LIMIT 50`,
       )
       .all();
 
@@ -657,6 +714,7 @@ app.get("/api/posts", authenticateToken, (req, res) => {
         author_id: p.author_id,
         username: p.username,
         avatar: p.author_avatar,
+        isPremiumAuthor: !!p.author_is_premium,
         content: p.content,
         image: p.image,
         video: p.video,
@@ -1296,6 +1354,21 @@ app.delete("/api/stories/:id", authenticateToken, (req, res) => {
     }
     db.prepare("DELETE FROM stories WHERE id = ?").run(req.params.id);
     res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Record story view (premium viewers are anonymous — view is NOT recorded)
+app.post("/api/stories/:id/view", authenticateToken, (req, res) => {
+  try {
+    const viewerIsPremium = hasPremium(req.user.uid);
+    if (!viewerIsPremium) {
+      db.prepare(
+        "INSERT OR IGNORE INTO story_views (viewer_id, story_id) VALUES (?, ?)"
+      ).run(req.user.uid, parseInt(req.params.id));
+    }
+    res.json({ success: true, anonymous: viewerIsPremium });
   } catch (error) {
     res.status(500).json({ error: "Server error" });
   }

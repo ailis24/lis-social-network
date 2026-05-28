@@ -1,0 +1,640 @@
+## 📝 **ПРОМТ ДЛЯ AGENT В REPLIТ:**
+
+```javascript
+Добавь ВСЕ premium функции в приложение! Реализуй систему где многие фичи доступны ТОЛЬКО с премиум подпиской.
+
+⚠️ ВАЖНО: 
+- Сохрани всю текущую логику приложения
+- Добавь проверки isPremium перед действиями
+- Покажи красивое модальное окно "Оформите Premium" когда фича заблокирована
+
+---
+
+## 🔒 **PREMIUM ОГРАНИЧЕНИЯ (НЕЛЬЗЯ БЕЗ ПРЕМИУМА):**
+
+### 1️⃣ **СТОРИС — ТОЛЬКО PREMIUM**
+
+**Загрузка сторис:**
+```javascript
+// Перед загрузкой проверяй:
+if (!user.isPremium) {
+  showPremiumModal("Загрузка сторис доступна только с Premium подпиской");
+  return;
+}
+// Иначе загружай как обычно
+```
+
+**UI:**
+- Кнопка "Добавить историю" видна всем
+- При клике без премиума → модальное окно с предложением оформить
+- С премиумом → открывается выбор фото/видео
+
+---
+
+### 2️⃣ **ЗВОНКИ — ТОЛЬКО PREMIUM**
+
+**Аудио и видео звонки:**
+- Кнопки 📞 и 📹 видны ВСЕМ в профиле
+- При клике ПРОВЕРЯЙ премиум:
+
+```javascript
+const handleCall = (type) => {
+  if (!user.isPremium) {
+    showPremiumModal({
+      title: "🔒 Звонки только для Premium",
+      text: "Оформите подписку чтобы совершать аудио и видео звонки",
+      features: ["📞 Безлимитные звонки", "🎥 Видео в HD качестве", "🔇 Шумоподавление"]
+    });
+    return;
+  }
+  // Иначе начинай звонок как обычно
+  startCall(type);
+};
+```
+
+**При получении звонка:**
+- Если звонящий БЕЗ премиума → блокируй звонок
+- Показывай: "У пользователя нет доступа к звонкам"
+
+---
+
+## ✨ **PREMIUM ФИШИ (РАБОТАЮТ С ПОДПИСКОЙ):**
+
+### 3️⃣ **АВТОМАТИЧЕСКИЙ ЛИСЁНОК**
+
+**С премиумом лис САМ себя обслуживает:**
+
+```javascript
+// В useEffect или интервале:
+if (user.isPremium) {
+  // Лис сам кушает когда голодный
+  if (foxStats.hunger < 30) {
+    autoFeed(); // Авто кормление
+  }
+  
+  // Лис сам спит когда устал
+  if (foxStats.energy < 20) {
+    autoSleep(); // Авто сон
+  }
+  
+  // Показывай индикатор "Лис доволен 🦊✨"
+}
+```
+
+**UI:**
+- Показывай значок "🤖 Авто-уход" когда премиум
+- Лис не требует внимания, сам восстанавливает показатели
+
+---
+
+### 4️⃣ **КТО СМОТРЕЛ ПРОФИЛЬ + СТАТИСТИКА**
+
+**Просмотры профиля:**
+```javascript
+// Когда кто-то заходит в профиль:
+if (profileOwner.isPremium) {
+  // Запиши в БД:
+  await db.collection('profileViews').add({
+    viewerId: currentUser.id,
+    viewerName: currentUser.nickname,
+    viewedAt: Date.now(),
+    profileId: profileOwner.id
+  });
+}
+```
+
+**UI для премиума:**
+- В профиле покажи секцию "👁 Просмотры"
+- Список кто заходил (никнейм + время)
+- За последние 24 часа / 7 дней / 30 дней
+
+**Статистика постов:**
+```javascript
+// Для премиум пользователей считай:
+const postStats = {
+  views: post.views.length,      // Охваты
+  likes: post.likes.length,       // Лайки
+  comments: post.comments.length, // Комментарии
+  shares: post.shares.length,     // Репосты
+  engagement: ((likes + comments) / views * 100).toFixed(2) + '%'
+};
+```
+
+**UI статистики:**
+- Под каждым постом премиума покажи "📊 Статистика"
+- Отдельная вкладка "Аналитика" в профиле
+- Графики: охваты, вовлечённость, лучшие посты
+
+---
+
+### 5️⃣ **ЧИТАЛКА СООБЩЕНИЙ + ФАЙЛЫ 500MB**
+
+**Цвет прочитанных сообщений:**
+
+```css
+/* Обычные пользователи: */
+.message.read {
+  opacity: 0.6;
+  color: #999;
+}
+
+/* Premium пользователи: */
+.premium .message.read {
+  opacity: 1;
+  color: #4CAF50; /* Ярко-зелёный */
+  font-weight: 500;
+}
+
+.premium .message.read::after {
+  content: ' ✓✓';
+  color: #4CAF50;
+}
+```
+
+**Загрузка файлов:**
+
+```javascript
+// Проверка размера файла:
+const handleFileUpload = (file) => {
+  const maxSize = user.isPremium ? 500 * 1024 * 1024 : 10 * 1024 * 1024;
+  // Premium: 500MB, Обычные: 10MB
+  
+  if (file.size > maxSize) {
+    const limit = user.isPremium ? '500MB' : '10MB';
+    alert(`Файл слишком большой. Максимум ${limit}`);
+    return;
+  }
+  
+  uploadFile(file);
+};
+```
+
+**UI:**
+- Показывай "📎 Прикрепить файл"
+- При выборе файла проверяй размер
+- Если без премиума > 10MB → покажи "Нужен Premium для файлов до 500MB"
+
+---
+
+### 6️⃣ **АНИМИРОВАННЫЙ АВАТАР + КОРОНА**
+
+**Загрузка GIF/видео аватара:**
+
+```javascript
+// При загрузке аватара:
+const handleAvatarUpload = (file) => {
+  if (file.type === 'image/gif' || file.type === 'video/mp4') {
+    if (!user.isPremium) {
+      showPremiumModal("Анимированные аватары только с Premium");
+      return;
+    }
+  }
+  // Иначе загружай
+};
+```
+
+**Отображение:**
+```jsx
+<div className="avatar-container">
+  {user.isPremium && (
+    <div className="crown-badge">👑</div>
+  )}
+  <img 
+    src={user.avatar} 
+    alt="avatar"
+    className={user.isPremium ? 'premium-avatar' : ''}
+  />
+</div>
+```
+
+**CSS:**
+```css
+.avatar-container {
+  position: relative;
+  display: inline-block;
+}
+
+.crown-badge {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  font-size: 24px;
+  z-index: 10;
+  animation: crownGlow 2s ease-in-out infinite;
+}
+
+@keyframes crownGlow {
+  0%, 100% { filter: drop-shadow(0 0 5px gold); }
+  50% { filter: drop-shadow(0 0 15px gold); }
+}
+
+.premium-avatar {
+  border: 3px solid gold;
+  border-radius: 50%;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+}
+
+/* Для GIF/видео аватаров */
+.premium-avatar.animated {
+  animation: avatarPulse 3s ease-in-out infinite;
+}
+
+@keyframes avatarPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+```
+
+---
+
+### 7️⃣ **АНОНИМНЫЙ ПРОСМОТР СТОРИС**
+
+**Логика:**
+```javascript
+// Когда открываешь сторис:
+const viewStory = async (storyId) => {
+  if (user.isPremium) {
+    // Premium: НЕ записывай просмотр
+    // Сторис не узнает что смотрел
+    await loadStory(storyId);
+  } else {
+    // Обычные: запиши просмотр в БД
+    await db.collection('storyViews').add({
+      userId: user.id,
+      storyId: storyId,
+      viewedAt: Date.now()
+    });
+    await loadStory(storyId);
+  }
+};
+```
+
+**UI:**
+- Показывай индикатор "👁 Анонимный режим" когда премиум
+- Владелец сторис НЕ видит тебя в списке просмотров
+
+---
+
+### 8️⃣ **ПРИОРИТЕТ В ЛЕНТЕ**
+
+**Сортировка постов:**
+
+```javascript
+// Загрузка ленты:
+const loadFeed = async () => {
+  const posts = await db.collection('posts').get();
+  
+  // Сортировка:
+  const sortedPosts = posts.sort((a, b) => {
+    // Premium посты выше
+    const aScore = a.author.isPremium ? 1000 : 0;
+    const bScore = b.author.isPremium ? 1000 : 0;
+    
+    // Плюс время публикации
+    return (bScore + b.createdAt) - (aScore + a.createdAt);
+  });
+  
+  setFeed(sortedPosts);
+};
+```
+
+**UI:**
+- Посты премиум пользователей показываются ПЕРВЫМИ
+- Показывай значок "⭐ Premium пост" (опционально)
+
+---
+
+## 💳 **СИСТЕМА ОПЛАТЫ И ПРОВЕРКИ ЧЕКОВ:**
+
+### **КНОПКА "Я ОПЛАТИЛ" → ЗАГРУЗКА ЧЕКА:**
+
+**Страница Premium:**
+
+```jsx
+<div className="premium-page">
+  <h1>👑 Premium Подписка</h1>
+  
+  <div className="premium-benefits">
+    <h2>Что вы получаете:</h2>
+    <ul>
+      <li>📞 Аудио и видео звонки</li>
+      <li>📸 Загрузка сторис</li>
+      <li>🦊 Авто-уход за лисёнком</li>
+      <li>👁 Кто смотрел профиль</li>
+      <li>📊 Статистика постов</li>
+      <li>📎 Файлы до 500MB</li>
+      <li>🎬 Анимированный аватар</li>
+      <li>👁 Анонимный просмотр сторис</li>
+      <li>⭐ Приоритет в ленте</li>
+      <li>И ещё много фишек!</li>
+    </ul>
+  </div>
+  
+  <div className="premium-price">
+    <h3>Цена: 299₽ / месяц</h3>
+    <p>Перевод на карту: +7 (999) 909-95-49</p>
+  </div>
+  
+  <button onClick={showPaymentForm} className="pay-button">
+    💳 Я оплатил
+  </button>
+</div>
+
+// Модальное окно оплаты:
+const PaymentModal = () => {
+  const [phone, setPhone] = useState('');
+  const [receipt, setReceipt] = useState(null);
+  
+  const handleSubmit = async () => {
+    // Загрузи чек
+    const receiptUrl = await uploadReceipt(receipt);
+    
+    // Сохрани в БД
+    await db.collection('paymentChecks').add({
+      userId: currentUser.id,
+      userPhone: phone,
+      receiptUrl: receiptUrl,
+      status: 'pending',
+      createdAt: Date.now()
+    });
+    
+    // Покажи успех
+    alert('✅ Чек загружен! Администратор проверит в течение 24 часов');
+    
+    // Закрой модалку
+    closeModal();
+  };
+  
+  return (
+    <div className="payment-modal">
+      <h2>🧾 Загрузка чека</h2>
+      
+      <div className="form-group">
+        <label>Номер телефона с которого оплатили:</label>
+        <input 
+          type="tel" 
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="+7 (999) 999-99-99"
+          required
+        />
+      </div>
+      
+      <div className="form-group">
+        <label>Скриншот чека:</label>
+        <input 
+          type="file" 
+          accept="image/*"
+          onChange={(e) => setReceipt(e.target.files[0])}
+          required
+        />
+        <small>Загрузите скриншот перевода из банковского приложения</small>
+      </div>
+      
+      <div className="modal-actions">
+        <button onClick={closeModal} className="cancel">Отмена</button>
+        <button onClick={handleSubmit} className="submit">
+          📤 Отправить чек
+        </button>
+      </div>
+    </div>
+  );
+};
+```
+
+**CSS для кнопок:**
+
+```css
+.pay-button {
+  background: linear-gradient(135deg, #FF6B35 0%, #FF8C5A 100%);
+  color: white;
+  padding: 15px 40px;
+  border: none;
+  border-radius: 15px;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(255, 107, 53, 0.4);
+  transition: transform 0.2s;
+}
+
+.pay-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.6);
+}
+
+.payment-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+}
+
+.payment-modal .modal-content {
+  background: white;
+  padding: 30px;
+  border-radius: 20px;
+  max-width: 500px;
+  width: 90%;
+}
+
+.form-group {
+  margin: 20px 0;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #333;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #ddd;
+  border-radius: 10px;
+  font-size: 16px;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #FF6B35;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 25px;
+}
+
+.modal-actions button {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.modal-actions .cancel {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.modal-actions .submit {
+  background: linear-gradient(135deg, #FF6B35, #FF8C5A);
+  color: white;
+}
+```
+
+---
+
+## 🔧 **БАЗА ДАННЫХ:**
+
+**Обнови схему users:**
+```javascript
+{
+  uid: string,
+  phone: string,
+  nickname: string,
+  avatar: string,
+  isPremium: boolean,          // default: false
+  premiumExpiry: timestamp | null,
+  isAdmin: boolean,            // default: false
+  // остальные поля...
+}
+```
+
+**Новая коллекция paymentChecks:**
+```javascript
+{
+  id: string,
+  userId: string,
+  userPhone: string,
+  receiptUrl: string,
+  status: 'pending' | 'approved' | 'rejected',
+  createdAt: timestamp,
+  checkedBy: string | null,    // admin id
+  checkedAt: timestamp | null
+}
+```
+
+**Новая коллекция profileViews (для премиума):**
+```javascript
+{
+  id: string,
+  viewerId: string,
+  viewerName: string,
+  viewerAvatar: string,
+  profileId: string,
+  viewedAt: timestamp
+}
+```
+
+---
+
+## 🎨 **PREMIUM MODAL (КОГДА НЕТ ДОСТУПА):**
+
+```jsx
+const PremiumModal = ({ title, text, features, onClose }) => {
+  return (
+    <div className="premium-lock-modal">
+      <div className="modal-content">
+        <div className="modal-header">
+          <h2>🔒 {title || "Требуется Premium"}</h2>
+          <button onClick={onClose} className="close-btn">✕</button>
+        </div>
+        
+        <p className="modal-text">
+          {text || "Эта функция доступна только с Premium подпиской"}
+        </p>
+        
+        {features && (
+          <div className="premium-features">
+            <h3>С Premium вы получите:</h3>
+            <ul>
+              {features.map((feature, index) => (
+                <li key={index}>✅ {feature}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        
+        <div className="modal-actions">
+          <button onClick={onClose} className="later">Позже</button>
+          <button onClick={() => goToPremiumPage()} className="buy">
+            👑 Оформить Premium
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+```
+
+---
+
+## ✅ **ПРОВЕРКА ПОСЛЕ РЕАЛИЗАЦИИ:**
+
+1. **Сторис:**
+   - Без премиума → модалка "Требуется Premium"
+   - С премиумом → загрузка работает
+
+2. **Звонки:**
+   - Кнопки видны всем
+   - Без премиума → модалка при клике
+   - С премиумом → звонок начинается
+
+3. **Лисёнок:**
+   - С премиумом → сам кушает/спит
+   - Показывай индикатор "Авто-уход"
+
+4. **Просмотры профиля:**
+   - С премиумом → видишь кто заходил
+   - Без премиума → не видишь
+
+5. **Статистика:**
+   - С премиумом → охваты, лайки, графики
+   - Без премиума → не показывай
+
+6. **Сообщения:**
+   - С премиумом → прочитанные зелёные ✓✓
+   - Без премиума → серые
+
+7. **Файлы:**
+   - С премиумом → до 500MB
+   - Без премиума → до 10MB
+
+8. **Аватар:**
+   - С премиумом → можно GIF/видео + корона 👑
+   - Без премиума → только фото
+
+9. **Сторис:**
+   - С премиумом → анонимный просмотр
+   - Владелец не видит тебя
+
+10. **Лента:**
+    - Посты премиум выше в ленте
+
+11. **Оплата:**
+    - Кнопка "Я оплатил" → форма → загрузка чека
+    - Чек попадает к админу
+
+---
+
+🚀 **НАЧНИ РЕАЛИЗАЦИЮ ПОШАГОВО!**
+```
+
+---
+
+**Скопируй этот промт и отправь агенту в Replit!** 
+
+Агент реализует все premium функции! 🦊✨

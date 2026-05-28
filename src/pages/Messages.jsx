@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { usePremium } from "../context/PremiumContext";
 import { messageService, userService, callService } from "../services";
 import StickerPicker from "../components/StickerPicker";
 import CallModal from "../components/CallModal";
+import PremiumLockModal from "../components/PremiumLockModal";
 import {
   PaperClipIcon,
   UserPlusIcon,
   UsersIcon,
 } from "@heroicons/react/24/outline";
 
-const MessageBubble = ({ message, isOwn, onDelete }) => (
+const MessageBubble = ({ message, isOwn, onDelete, isPremiumOwn }) => (
   <div className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-3 group`}>
     <div className="max-w-xs lg:max-w-md">
       {!isOwn && (
@@ -63,6 +65,9 @@ const MessageBubble = ({ message, isOwn, onDelete }) => (
             hour: "2-digit",
             minute: "2-digit",
           })}
+          {isOwn && isPremiumOwn && (
+            <span className="ml-1 text-green-300 font-bold">✓✓</span>
+          )}
         </p>
       </div>
       {isOwn && (
@@ -293,12 +298,14 @@ const UserPicker = ({ title, multi, onClose, onConfirm, excludeIds = [] }) => {
 
 export default function Messages() {
   const { user } = useAuth();
+  const { isPremium } = usePremium();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const [conversations, setConversations] = useState([]);
   const [selectedConv, setSelectedConv] = useState(null);
   const [activeCall, setActiveCall] = useState(null);
+  const [showCallLock, setShowCallLock] = useState(false);
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState("");
   const [attachment, setAttachment] = useState(null);
@@ -566,9 +573,8 @@ export default function Messages() {
                 <>
                   <button
                     onClick={() => {
-                      const other = selectedConv.participants?.find(
-                        (p) => p !== user?.uid,
-                      );
+                      if (!isPremium) { setShowCallLock(true); return; }
+                      const other = selectedConv.participants?.find((p) => p !== user?.uid);
                       if (other) setActiveCall({ type: "audio", targetId: other });
                     }}
                     title="Аудиозвонок"
@@ -578,9 +584,8 @@ export default function Messages() {
                   </button>
                   <button
                     onClick={() => {
-                      const other = selectedConv.participants?.find(
-                        (p) => p !== user?.uid,
-                      );
+                      if (!isPremium) { setShowCallLock(true); return; }
+                      const other = selectedConv.participants?.find((p) => p !== user?.uid);
                       if (other) setActiveCall({ type: "video", targetId: other });
                     }}
                     title="Видеозвонок"
@@ -611,6 +616,7 @@ export default function Messages() {
                     key={msg.id}
                     message={msg}
                     isOwn={msg.sender_id === user?.uid}
+                    isPremiumOwn={isPremium}
                     onDelete={deleteMessage}
                   />
                 ))
@@ -655,7 +661,20 @@ export default function Messages() {
                   <input
                     type="file"
                     className="hidden"
-                    onChange={(e) => setAttachment(e.target.files[0])}
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      const maxSize = isPremium ? 500 * 1024 * 1024 : 10 * 1024 * 1024;
+                      if (file.size > maxSize) {
+                        alert(isPremium
+                          ? "Файл слишком большой (макс 500 МБ)"
+                          : `Файл слишком большой (макс 10 МБ). Оформите Premium для файлов до 500 МБ`
+                        );
+                        e.target.value = "";
+                        return;
+                      }
+                      setAttachment(file);
+                    }}
                   />
                 </label>
                 <input
@@ -712,6 +731,14 @@ export default function Messages() {
           targetName={activeCall.targetName || "Собеседник"}
           callType={activeCall.type}
           onEnd={() => setActiveCall(null)}
+        />
+      )}
+
+      {showCallLock && (
+        <PremiumLockModal
+          feature="Звонки"
+          featureList={["📞 Аудио и видео звонки", "📎 Файлы до 500 МБ", "📸 Загрузка сторис", "👁 Кто смотрел профиль", "⭐ Приоритет в ленте"]}
+          onClose={() => setShowCallLock(false)}
         />
       )}
     </div>

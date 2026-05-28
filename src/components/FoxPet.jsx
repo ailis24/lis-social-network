@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { usePremium } from "../context/PremiumContext";
 
 /* ─── Fox images ─────────────────────────────────────────────────────────── */
 const IMG = {
@@ -164,6 +165,7 @@ export default function FoxPet() {
   const nextRef     = useRef(null);
   const statsRef    = useRef(stats);
   const heartCntRef = useRef(0);
+  const { isPremium } = usePremium();
 
   posRef.current   = pos;
   stateRef.current = foxState;
@@ -192,6 +194,10 @@ export default function FoxPet() {
     }, 20000); // every 20s in dev (would be 30min in prod)
     return () => clearInterval(iv);
   }, []);
+
+  /* ── Auto-care for premium users (placed after showMsg definition below) ── */
+  const premiumRef = useRef(isPremium);
+  useEffect(() => { premiumRef.current = isPremium; }, [isPremium]);
 
   /* ── Spawn poops when cleanliness low / ignored ── */
   useEffect(() => {
@@ -232,6 +238,30 @@ export default function FoxPet() {
     clearTimeout(msgRef.current);
     msgRef.current = setTimeout(() => setMsg(""), ms);
   }, []);
+
+  /* ── Auto-care (premium) ── */
+  useEffect(() => {
+    if (!premiumRef.current) return;
+    const iv = setInterval(() => {
+      if (!premiumRef.current) return;
+      setStats((s) => {
+        let upd = { ...s };
+        if (s.hunger < 30 && !s.isSleeping) {
+          upd = { ...upd, hunger: Math.min(100, s.hunger + 25), happiness: Math.min(100, s.happiness + 5) };
+          showMsg("🤖✨ Авто-кормление!");
+        }
+        if (s.energy < 20 && !s.isSleeping) {
+          upd = { ...upd, isSleeping: true, sleepUntil: Date.now() + 1000 * 60 * 3, energy: Math.min(100, s.energy + 15) };
+          showMsg("🌙✨ Авто-сон!");
+        }
+        if (s.cleanliness < 25) {
+          upd = { ...upd, cleanliness: Math.min(100, s.cleanliness + 20) };
+        }
+        return upd;
+      });
+    }, 25000);
+    return () => clearInterval(iv);
+  }, [showMsg]);
 
   /* ── Walk ── */
   const stopWalk = () => clearInterval(walkRef.current);

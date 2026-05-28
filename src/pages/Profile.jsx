@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { usePremium } from "../context/PremiumContext";
 import {
   userService,
   postService,
@@ -8,9 +9,11 @@ import {
   messageService,
   callService,
   adminService,
+  profileViewsService,
 } from "../services";
 import { CameraIcon } from "@heroicons/react/24/outline";
 import CallModal from "../components/CallModal";
+import PremiumLockModal from "../components/PremiumLockModal";
 
 export default function Profile() {
   const { uid: paramUid } = useParams();
@@ -40,7 +43,13 @@ export default function Profile() {
   const [transferLoading, setTransferLoading] = useState(false);
   const [transferMsg, setTransferMsg] = useState("");
 
+  const { isPremium: currentUserIsPremium } = usePremium();
   const isViewerAdmin = !!currentUser?.is_admin;
+
+  const [showPremiumLock, setShowPremiumLock] = useState(false);
+  const [premiumLockFeature, setPremiumLockFeature] = useState("");
+  const [profileViews, setProfileViews] = useState([]);
+  const [showViews, setShowViews] = useState(false);
 
   const load = useCallback(async () => {
     if (!uid) return;
@@ -89,6 +98,12 @@ export default function Profile() {
     const file = e.target.files[0];
     if (!file) return;
     setAvatarError("");
+    if ((file.type === "image/gif" || file.type === "video/mp4") && !currentUserIsPremium) {
+      setPremiumLockFeature("Анимированный аватар");
+      setShowPremiumLock(true);
+      e.target.value = "";
+      return;
+    }
     try {
       const result = await userService.uploadAvatar(file);
       setProfile((p) => ({ ...p, avatar: result.avatar }));
@@ -97,6 +112,27 @@ export default function Profile() {
       setAvatarError("Ошибка загрузки. Попробуй снова.");
     }
   };
+
+  const handleCall = (type) => {
+    if (!currentUserIsPremium) {
+      setPremiumLockFeature("Звонки только для Premium");
+      setShowPremiumLock(true);
+      return;
+    }
+    setActiveCall({ type });
+  };
+
+  const loadProfileViews = useCallback(async () => {
+    if (!isOwn || !profileIsPremium) return;
+    try {
+      const views = await profileViewsService.getViews(uid);
+      setProfileViews(views);
+    } catch (_) {}
+  }, [isOwn, profileIsPremium, uid]);
+
+  useEffect(() => {
+    loadProfileViews();
+  }, [loadProfileViews]);
 
   const handleAddFriend = async () => {
     if (friendStatus !== "none") return;
@@ -195,15 +231,16 @@ export default function Profile() {
         {/* Avatar */}
         <div className="flex flex-col items-center text-center mb-6">
           <div className="relative mb-3">
+            {profile.isPremium && <div className="crown-badge">👑</div>}
             {profile.avatar ? (
               <img
                 src={profile.avatar}
                 alt={profile.username}
                 loading="lazy"
-                className="w-24 h-24 rounded-full object-cover border-4 border-purple-200 shadow"
+                className={`w-24 h-24 rounded-full object-cover border-4 shadow ${profile.isPremium ? "premium-avatar-ring border-yellow-400" : "border-purple-200"}`}
               />
             ) : (
-              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-4xl font-bold shadow">
+              <div className={`w-24 h-24 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-4xl font-bold shadow ${profile.isPremium ? "premium-avatar-ring" : ""}`}>
                 {profile.username?.charAt(0)?.toUpperCase()}
               </div>
             )}
@@ -410,16 +447,16 @@ export default function Profile() {
             {/* Call buttons */}
             <div className="flex gap-2">
               <button
-                onClick={() => setActiveCall({ type: "audio" })}
+                onClick={() => handleCall("audio")}
                 className="flex-1 py-2.5 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
               >
-                📞 Аудиозвонок
+                📞 {currentUserIsPremium ? "Аудиозвонок" : "🔒 Аудио"}
               </button>
               <button
-                onClick={() => setActiveCall({ type: "video" })}
+                onClick={() => handleCall("video")}
                 className="flex-1 py-2.5 bg-purple-500 hover:bg-purple-600 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
               >
-                📹 Видеозвонок
+                📹 {currentUserIsPremium ? "Видеозвонок" : "🔒 Видео"}
               </button>
             </div>
           </div>
@@ -435,6 +472,58 @@ export default function Profile() {
           </>
         )}
       </div>
+
+      {/* Profile views — premium owners only */}
+      {isOwn && profileIsPremium && (
+        <div className="bg-white/95 rounded-3xl shadow-lg p-5 mb-6">
+          <button
+            onClick={() => setShowViews((v) => !v)}
+            className="w-full flex items-center justify-between"
+          >
+            <span className="font-bold text-gray-800 flex items-center gap-2">
+              <span>👁</span> Кто смотрел профиль
+              {profileViews.length > 0 && (
+                <span className="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                  {profileViews.length}
+                </span>
+              )}
+            </span>
+            <span className="text-gray-400 text-sm">{showViews ? "▲" : "▼"}</span>
+          </button>
+          {showViews && (
+            <div className="mt-3 space-y-2">
+              {profileViews.length === 0 ? (
+                <p className="text-gray-400 text-sm text-center py-3">Пока никто не заходил</p>
+              ) : (
+                profileViews.map((v) => (
+                  <Link key={v.id} to={`/profile/${v.viewer_id}`} className="flex items-center gap-3 p-2 rounded-xl hover:bg-purple-50 transition-colors">
+                    {v.avatar ? (
+                      <img src={v.avatar} alt={v.username} className="w-9 h-9 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-sm font-bold">
+                        {v.username?.charAt(0)?.toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <p className="font-semibold text-gray-800 text-sm">@{v.username}</p>
+                      <p className="text-gray-400 text-xs">
+                        {new Date(v.viewed_at).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </div>
+                  </Link>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {showPremiumLock && (
+        <PremiumLockModal
+          feature={premiumLockFeature}
+          onClose={() => setShowPremiumLock(false)}
+        />
+      )}
 
       {/* Friends list modal */}
       {showFriendsList && (

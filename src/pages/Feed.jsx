@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { usePremium } from "../context/PremiumContext";
+import PremiumLockModal from "../components/PremiumLockModal";
 import {
   postService,
   storyService,
@@ -50,67 +52,42 @@ const AutoVideo = ({ src, className = "" }) => {
   );
 };
 
-// ─── Premium Modal ────────────────────────────────────────────────────────────
-const PremiumModal = ({ onClose, onActivated }) => {
-  const [phone, setPhone] = useState(PAYMENT_PHONE);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const handlePay = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      await premiumService.activate(phone);
-      onActivated();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+// ─── Premium Modal (timer unlock) ────────────────────────────────────────────
+const PremiumModal = ({ onClose }) => {
+  const navigate = useNavigate();
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl">
-        <div className="text-5xl mb-3">💎</div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">
-          Lis Премиум
-        </h2>
-        <p className="text-gray-600 text-sm mb-4">
-          Отключи таймер ленты на 30 дней.
+        <div className="text-5xl mb-3">👑</div>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Lis Premium</h2>
+        <p className="text-gray-500 text-sm mb-4">
+          С Premium таймер ленты отключается и открываются все возможности
         </p>
-        <div className="bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200 rounded-2xl p-4 mb-4 text-left">
+        <div className="bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-100 rounded-2xl p-4 mb-5 text-left">
           <p className="text-xs text-gray-500 mb-1">Стоимость</p>
-          <p className="text-3xl font-bold text-purple-700 mb-3">299 ₽</p>
-          <p className="text-xs text-gray-500 mb-1">Перевод по СБП на номер:</p>
-          <p className="text-lg font-bold text-gray-800 select-all">
-            {PAYMENT_PHONE}
-          </p>
+          <p className="text-3xl font-bold text-purple-700 mb-2">299 ₽/мес</p>
+          <p className="text-xs text-gray-500">Перевод по СБП на:</p>
+          <p className="text-base font-bold text-gray-800 select-all">{PAYMENT_PHONE}</p>
         </div>
-        <input
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="Подтвердите номер перевода"
-          className="w-full mb-3 px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 bg-gray-50"
-        />
-        {error && (
-          <p className="text-red-500 text-xs mb-3 bg-red-50 p-2 rounded-lg">
-            {error}
-          </p>
-        )}
-        <div className="flex gap-2">
+        <div className="space-y-1.5 text-left mb-5">
+          {["📸 Сторис","📞 Звонки","🦊 Авто-лисёнок","👁 Кто смотрел","📊 Статистика","📎 Файлы 500МБ"].map((f,i)=>(
+            <div key={i} className="flex items-center gap-2 text-sm text-gray-700">
+              <span className="text-green-500 font-bold text-xs">✓</span>{f}
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2 mt-1">
           <button
             onClick={onClose}
             className="flex-1 py-2.5 bg-gray-100 text-gray-600 font-semibold rounded-xl hover:bg-gray-200"
           >
-            Отмена
+            Позже
           </button>
           <button
-            onClick={handlePay}
-            disabled={loading}
-            className="flex-1 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl hover:shadow-lg disabled:opacity-50"
+            onClick={() => { onClose(); navigate("/premium"); }}
+            className="flex-1 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl hover:shadow-lg"
           >
-            {loading ? "..." : "Я оплатил ✓"}
+            👑 Оформить
           </button>
         </div>
       </div>
@@ -302,12 +279,13 @@ const StoryRecorder = ({ onClose, onUploaded }) => {
 };
 
 // ─── Stories Bar ──────────────────────────────────────────────────────────────
-const StoriesBar = ({ currentUser }) => {
+const StoriesBar = ({ currentUser, isPremium }) => {
   const [stories, setStories] = useState([]);
   const [viewing, setViewing] = useState(null);
   const [activeIdx, setActiveIdx] = useState(0);
   const [showRecorder, setShowRecorder] = useState(false);
   const [showChooser, setShowChooser] = useState(false);
+  const [showStoryLock, setShowStoryLock] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [storyProgress, setStoryProgress] = useState(0);
   const fileRef = useRef();
@@ -400,6 +378,10 @@ const StoriesBar = ({ currentUser }) => {
     setViewing(group);
     setActiveIdx(0);
     setStoryProgress(0);
+    // Record story view for first item (anonymous if viewer is premium)
+    if (group.items?.[0]?.id) {
+      storyService.viewStory(group.items[0].id);
+    }
   };
 
   const currentItem = viewing?.items?.[activeIdx];
@@ -433,11 +415,14 @@ const StoriesBar = ({ currentUser }) => {
       <div className="flex gap-3 overflow-x-auto scrollbar-hide">
         {/* Add story button */}
         <button
-          onClick={() => setShowChooser(true)}
+          onClick={() => {
+            if (!isPremium) { setShowStoryLock(true); return; }
+            setShowChooser(true);
+          }}
           className="flex-shrink-0 flex flex-col items-center gap-1"
         >
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-2xl border-2 border-white shadow">
-            +
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-2xl border-2 border-white shadow relative">
+            {isPremium ? "+" : "🔒"}
           </div>
           <span className="text-xs text-gray-500">Сторис</span>
         </button>
@@ -514,6 +499,15 @@ const StoriesBar = ({ currentUser }) => {
         <StoryRecorder
           onClose={() => setShowRecorder(false)}
           onUploaded={loadStories}
+        />
+      )}
+
+      {/* Premium lock for stories */}
+      {showStoryLock && (
+        <PremiumLockModal
+          feature="Загрузка сторис"
+          featureList={["📸 Загрузка сторис (фото и видео)", "📞 Аудио и видео звонки", "🦊 Авто-уход за лисёнком", "👁 Кто смотрел профиль", "⭐ Приоритет в ленте"]}
+          onClose={() => setShowStoryLock(false)}
         />
       )}
 
@@ -2086,7 +2080,7 @@ export default function Feed() {
         <FeedLocked lockUntil={lockUntil} onUnlock={handleUnlock} />
       ) : (
         <>
-          <StoriesBar currentUser={user} />
+          <StoriesBar currentUser={user} isPremium={premium} />
           <CreatePost currentUser={user} onCreated={loadFeed} />
 
           {posts.length === 0 ? (

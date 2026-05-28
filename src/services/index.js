@@ -334,6 +334,15 @@ export const storyService = {
     if (!res.ok) throw new Error("Delete failed");
     return await res.json();
   },
+
+  viewStory: async (id) => {
+    try {
+      await fetch(`${API_URL}/api/stories/${id}/view`, {
+        method: "POST",
+        headers: getAuthHeader(),
+      });
+    } catch (_) {}
+  },
 };
 
 export const notificationService = {
@@ -544,6 +553,16 @@ export const adminService = {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Submit check failed");
     return data;
+  },
+};
+
+export const profileViewsService = {
+  getViews: async (uid) => {
+    const res = await fetch(`${API_URL}/api/users/${uid}/views`, {
+      headers: getAuthHeader(),
+    });
+    if (!res.ok) throw new Error("Failed to load profile views");
+    return await res.json();
   },
 };
 
