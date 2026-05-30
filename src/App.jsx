@@ -1,5 +1,11 @@
-import React, { lazy, Suspense, useState, useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import React, { lazy, Suspense, useState, useEffect, useRef } from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+} from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { FitnessProvider } from "./context/FitnessContext";
 import { PremiumProvider } from "./context/PremiumContext";
@@ -7,6 +13,7 @@ import Header from "./components/Header";
 import CallModal from "./components/CallModal";
 import FoxPet from "./components/FoxPet";
 import { callService } from "./services";
+import { startRingtone } from "./utils/sounds";
 
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
@@ -16,6 +23,7 @@ const Messages = lazy(() => import("./pages/Messages"));
 const Search = lazy(() => import("./pages/Search"));
 const AdminPanel = lazy(() => import("./pages/AdminPanel"));
 const Premium = lazy(() => import("./pages/Premium"));
+const Marketplace = lazy(() => import("./pages/Marketplace"));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center py-20">
@@ -34,6 +42,31 @@ function IncomingCallBanner() {
   const { user } = useAuth();
   const [incoming, setIncoming] = useState(null);
   const [showCall, setShowCall] = useState(false);
+  const stopRingtoneRef = useRef(null);
+  const lastCallIdRef = useRef(null);
+
+  // Start / stop ringtone when incoming call appears or disappears
+  useEffect(() => {
+    if (incoming && !showCall) {
+      if (lastCallIdRef.current !== incoming.id) {
+        lastCallIdRef.current = incoming.id;
+        if (stopRingtoneRef.current) stopRingtoneRef.current();
+        stopRingtoneRef.current = startRingtone();
+      }
+    } else {
+      if (stopRingtoneRef.current) {
+        stopRingtoneRef.current();
+        stopRingtoneRef.current = null;
+      }
+      if (!incoming) lastCallIdRef.current = null;
+    }
+    return () => {
+      if (stopRingtoneRef.current) {
+        stopRingtoneRef.current();
+        stopRingtoneRef.current = null;
+      }
+    };
+  }, [incoming, showCall]);
 
   useEffect(() => {
     if (!user) return;
@@ -47,6 +80,19 @@ function IncomingCallBanner() {
     }, 3000);
     return () => clearInterval(iv);
   }, [user, showCall]);
+
+  const decline = () => {
+    callService.end(incoming.id, true).catch(() => {});
+    setIncoming(null);
+  };
+
+  const accept = () => {
+    if (stopRingtoneRef.current) {
+      stopRingtoneRef.current();
+      stopRingtoneRef.current = null;
+    }
+    setShowCall(true);
+  };
 
   if (!incoming) return null;
   if (showCall)
@@ -76,13 +122,13 @@ function IncomingCallBanner() {
         </p>
       </div>
       <button
-        onClick={() => callService.end(incoming.id, true).then(() => setIncoming(null))}
+        onClick={decline}
         className="w-10 h-10 rounded-full bg-red-500 text-white flex items-center justify-center text-lg"
       >
         📵
       </button>
       <button
-        onClick={() => setShowCall(true)}
+        onClick={accept}
         className="w-10 h-10 rounded-full bg-green-500 text-white flex items-center justify-center text-lg"
       >
         {incoming.type === "video" ? "📹" : "📞"}
@@ -186,6 +232,17 @@ function AppRoutes() {
             <ProtectedRoute>
               <AppLayout>
                 <Premium />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/marketplace"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <Marketplace />
               </AppLayout>
             </ProtectedRoute>
           }

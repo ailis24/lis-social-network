@@ -7,10 +7,9 @@ import {
   postService,
   storyService,
   timerService,
-  premiumService,
   challengeService,
 } from "../services";
-import { PhotoIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
+import { Image as PhotoIcon, Video as VideoCameraIcon } from "lucide-react";
 import StickerPicker from "../components/StickerPicker";
 
 const TIMER_LIMIT = 10 * 60; // 10 minutes in seconds
@@ -67,12 +66,25 @@ const PremiumModal = ({ onClose }) => {
           <p className="text-xs text-gray-500 mb-1">Стоимость</p>
           <p className="text-3xl font-bold text-purple-700 mb-2">299 ₽/мес</p>
           <p className="text-xs text-gray-500">Перевод по СБП на:</p>
-          <p className="text-base font-bold text-gray-800 select-all">{PAYMENT_PHONE}</p>
+          <p className="text-base font-bold text-gray-800 select-all">
+            {PAYMENT_PHONE}
+          </p>
         </div>
         <div className="space-y-1.5 text-left mb-5">
-          {["📸 Сторис","📞 Звонки","🦊 Авто-лисёнок","👁 Кто смотрел","📊 Статистика","📎 Файлы 500МБ"].map((f,i)=>(
-            <div key={i} className="flex items-center gap-2 text-sm text-gray-700">
-              <span className="text-green-500 font-bold text-xs">✓</span>{f}
+          {[
+            "📸 Сторис",
+            "📞 Звонки",
+            "🦊 Авто-лисёнок",
+            "👁 Кто смотрел",
+            "📊 Статистика",
+            "📎 Файлы 500МБ",
+          ].map((f, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-2 text-sm text-gray-700"
+            >
+              <span className="text-green-500 font-bold text-xs">✓</span>
+              {f}
             </div>
           ))}
         </div>
@@ -84,7 +96,10 @@ const PremiumModal = ({ onClose }) => {
             Позже
           </button>
           <button
-            onClick={() => { onClose(); navigate("/premium"); }}
+            onClick={() => {
+              onClose();
+              navigate("/premium");
+            }}
             className="flex-1 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl hover:shadow-lg"
           >
             👑 Оформить
@@ -134,11 +149,10 @@ const StoryRecorder = ({ onClose, onUploaded }) => {
     return () => {
       alive = false;
       if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
-      if (
-        recorderRef.current &&
-        recorderRef.current.state !== "inactive"
-      ) {
-        try { recorderRef.current.stop(); } catch {}
+      if (recorderRef.current && recorderRef.current.state !== "inactive") {
+        try {
+          recorderRef.current.stop();
+        } catch {}
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
@@ -259,9 +273,7 @@ const StoryRecorder = ({ onClose, onUploaded }) => {
             aria-label="Остановить запись"
           />
         )}
-        {phase === "uploading" && (
-          <p className="text-white">Загружаем...</p>
-        )}
+        {phase === "uploading" && <p className="text-white">Загружаем...</p>}
         {phase === "error" && (
           <div className="text-center">
             <p className="text-red-300 mb-2">{error}</p>
@@ -411,201 +423,236 @@ const StoriesBar = ({ currentUser, isPremium }) => {
 
   return (
     <>
-    <div className="bg-white/95 rounded-2xl shadow mb-4 p-3">
-      <div className="flex gap-3 overflow-x-auto scrollbar-hide">
-        {/* Add story button */}
-        <button
-          onClick={() => {
-            if (!isPremium) { setShowStoryLock(true); return; }
-            setShowChooser(true);
-          }}
-          className="flex-shrink-0 flex flex-col items-center gap-1"
-        >
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-2xl border-2 border-white shadow relative">
-            {isPremium ? "+" : "🔒"}
-          </div>
-          <span className="text-xs text-gray-500">Сторис</span>
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*,video/*"
-          className="hidden"
-          onChange={handleUpload}
-        />
-
-        {/* Stories */}
-        {groups.map((group) => (
+      <div className="bg-white/95 rounded-2xl shadow mb-4 p-3">
+        <div className="flex gap-3 overflow-x-auto scrollbar-hide">
+          {/* Add story button */}
           <button
-            key={group.user_id}
-            onClick={() => openViewer(group)}
+            onClick={() => {
+              if (!isPremium) {
+                setShowStoryLock(true);
+                return;
+              }
+              setShowChooser(true);
+            }}
             className="flex-shrink-0 flex flex-col items-center gap-1"
           >
-            <div className="w-14 h-14 rounded-full p-0.5 bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-400">
-              <img
-                src={group.avatar || "/fox.gif"}
-                alt={group.username}
-                loading="lazy"
-                className="w-full h-full rounded-full object-cover border-2 border-white"
-              />
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-2xl border-2 border-white shadow relative">
+              {isPremium ? "+" : "🔒"}
             </div>
-            <span className="text-xs text-gray-600 truncate max-w-[56px]">
-              {group.username}
-            </span>
+            <span className="text-xs text-gray-500">Сторис</span>
           </button>
-        ))}
-      </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*,video/*"
+            className="hidden"
+            onChange={handleUpload}
+          />
 
-      {/* Source chooser */}
-      {showChooser && (
-        <div
-          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
-          onClick={() => setShowChooser(false)}
-        >
-          <div
-            className="bg-white rounded-3xl p-6 max-w-xs w-full"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="font-bold text-lg text-gray-800 mb-4 text-center">
-              Новая сторис
-            </h3>
+          {/* Stories */}
+          {groups.map((group) => (
             <button
-              onClick={() => {
-                setShowChooser(false);
-                setShowRecorder(true);
-              }}
-              className="w-full py-3 mb-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-2xl"
+              key={group.user_id}
+              onClick={() => openViewer(group)}
+              className="flex-shrink-0 flex flex-col items-center gap-1"
             >
-              📷 Снять видео (15 сек)
-            </button>
-            <button
-              onClick={() => {
-                setShowChooser(false);
-                fileRef.current?.click();
-              }}
-              className="w-full py-3 bg-gray-100 text-gray-700 font-bold rounded-2xl"
-            >
-              🖼 Загрузить файл
-            </button>
-            <p className="text-xs text-gray-400 text-center mt-3">
-              Сторис исчезнет через 24 часа
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Recorder */}
-      {showRecorder && (
-        <StoryRecorder
-          onClose={() => setShowRecorder(false)}
-          onUploaded={loadStories}
-        />
-      )}
-
-      {/* Premium lock for stories */}
-      {showStoryLock && (
-        <PremiumLockModal
-          feature="Загрузка сторис"
-          featureList={["📸 Загрузка сторис (фото и видео)", "📞 Аудио и видео звонки", "🦊 Авто-уход за лисёнком", "👁 Кто смотрел профиль", "⭐ Приоритет в ленте"]}
-          onClose={() => setShowStoryLock(false)}
-        />
-      )}
-
-      {/* Story viewer — FULLSCREEN */}
-      {viewing && currentItem && (
-        <div className="fixed inset-0 bg-black z-50 flex flex-col select-none">
-
-          {/* Progress bars */}
-          <div className="flex gap-1 px-3 pt-10 pb-1 safe-area-top">
-            {viewing.items.map((_, i) => (
-              <div key={i} className="h-0.5 flex-1 rounded-full bg-white/30 overflow-hidden">
-                <div
-                  className="h-full bg-white rounded-full"
-                  style={{
-                    width: i < activeIdx ? "100%" : i === activeIdx ? `${storyProgress}%` : "0%",
-                    transition: i === activeIdx ? "none" : "none",
-                  }}
+              <div className="w-14 h-14 rounded-full p-0.5 bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-400">
+                <img
+                  src={group.avatar || "/fox.gif"}
+                  alt={group.username}
+                  loading="lazy"
+                  className="w-full h-full rounded-full object-cover border-2 border-white"
                 />
               </div>
-            ))}
-          </div>
-
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-2">
-            <div className="flex items-center gap-2">
-              <img
-                src={viewing.avatar || "/fox.gif"}
-                alt=""
-                className="w-9 h-9 rounded-full object-cover border-2 border-white/40"
-              />
-              <div>
-                <p className="text-white font-semibold text-sm leading-tight">@{viewing.username}</p>
-                <p className="text-white/60 text-xs">⏳ {formatRemaining(currentItem.expires_at)}</p>
-              </div>
-            </div>
-            <button
-              onClick={() => { clearInterval(progressRef.current); setViewing(null); }}
-              className="w-9 h-9 flex items-center justify-center text-white text-2xl"
-            >
-              ✕
+              <span className="text-xs text-gray-600 truncate max-w-[56px]">
+                {group.username}
+              </span>
             </button>
-          </div>
-
-          {/* Content — tap left/right to navigate */}
-          <div
-            className="flex-1 relative overflow-hidden"
-            onClick={(e) => {
-              const x = e.clientX;
-              const w = window.innerWidth;
-              if (x < w * 0.35) {
-                setActiveIdx((i) => Math.max(0, i - 1));
-              } else {
-                if (activeIdx + 1 < viewing.items.length) setActiveIdx((i) => i + 1);
-                else { clearInterval(progressRef.current); setViewing(null); }
-              }
-            }}
-          >
-            {currentItem.media_type === "video" ? (
-              <video
-                key={currentItem.id}
-                autoPlay
-                playsInline
-                className="w-full h-full object-contain"
-                onEnded={() => {
-                  if (activeIdx + 1 < viewing.items.length) setActiveIdx((i) => i + 1);
-                  else { clearInterval(progressRef.current); setViewing(null); }
-                }}
-              >
-                <source src={currentItem.media_url} />
-              </video>
-            ) : (
-              <img
-                src={currentItem.media_url}
-                alt="Story"
-                className="w-full h-full object-contain"
-                loading="lazy"
-              />
-            )}
-
-            {/* Tap zones hint (invisible) */}
-            <div className="absolute inset-y-0 left-0 w-1/3" />
-            <div className="absolute inset-y-0 right-0 w-1/3" />
-          </div>
-
-          {/* Bottom: delete button */}
-          <div className="flex justify-center pb-8 pt-3">
-            {(viewing.user_id === currentUser?.uid || currentUser?.is_admin) && (
-              <button
-                onClick={(e) => { e.stopPropagation(); handleStoryDelete(currentItem.id); }}
-                className="text-red-300 hover:text-red-400 text-sm bg-black/30 px-4 py-2 rounded-full"
-              >
-                🗑 Удалить сторис
-              </button>
-            )}
-          </div>
+          ))}
         </div>
-      )}
-    </div>
+
+        {/* Source chooser */}
+        {showChooser && (
+          <div
+            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowChooser(false)}
+          >
+            <div
+              className="bg-white rounded-3xl p-6 max-w-xs w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="font-bold text-lg text-gray-800 mb-4 text-center">
+                Новая сторис
+              </h3>
+              <button
+                onClick={() => {
+                  setShowChooser(false);
+                  setShowRecorder(true);
+                }}
+                className="w-full py-3 mb-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-2xl"
+              >
+                📷 Снять видео (15 сек)
+              </button>
+              <button
+                onClick={() => {
+                  setShowChooser(false);
+                  fileRef.current?.click();
+                }}
+                className="w-full py-3 bg-gray-100 text-gray-700 font-bold rounded-2xl"
+              >
+                🖼 Загрузить файл
+              </button>
+              <p className="text-xs text-gray-400 text-center mt-3">
+                Сторис исчезнет через 24 часа
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Recorder */}
+        {showRecorder && (
+          <StoryRecorder
+            onClose={() => setShowRecorder(false)}
+            onUploaded={loadStories}
+          />
+        )}
+
+        {/* Premium lock for stories */}
+        {showStoryLock && (
+          <PremiumLockModal
+            feature="Загрузка сторис"
+            featureList={[
+              "📸 Загрузка сторис (фото и видео)",
+              "📞 Аудио и видео звонки",
+              "🦊 Авто-уход за лисёнком",
+              "👁 Кто смотрел профиль",
+              "⭐ Приоритет в ленте",
+            ]}
+            onClose={() => setShowStoryLock(false)}
+          />
+        )}
+
+        {/* Story viewer — FULLSCREEN */}
+        {viewing && currentItem && (
+          <div className="fixed inset-0 bg-black z-50 flex flex-col select-none">
+            {/* Progress bars */}
+            <div className="flex gap-1 px-3 pt-10 pb-1 safe-area-top">
+              {viewing.items.map((_, i) => (
+                <div
+                  key={i}
+                  className="h-0.5 flex-1 rounded-full bg-white/30 overflow-hidden"
+                >
+                  <div
+                    className="h-full bg-white rounded-full"
+                    style={{
+                      width:
+                        i < activeIdx
+                          ? "100%"
+                          : i === activeIdx
+                            ? `${storyProgress}%`
+                            : "0%",
+                      transition: i === activeIdx ? "none" : "none",
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-2">
+              <div className="flex items-center gap-2">
+                <img
+                  src={viewing.avatar || "/fox.gif"}
+                  alt=""
+                  className="w-9 h-9 rounded-full object-cover border-2 border-white/40"
+                />
+                <div>
+                  <p className="text-white font-semibold text-sm leading-tight">
+                    @{viewing.username}
+                  </p>
+                  <p className="text-white/60 text-xs">
+                    ⏳ {formatRemaining(currentItem.expires_at)}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  clearInterval(progressRef.current);
+                  setViewing(null);
+                }}
+                className="w-9 h-9 flex items-center justify-center text-white text-2xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content — tap left/right to navigate */}
+            <div
+              className="flex-1 relative overflow-hidden"
+              onClick={(e) => {
+                const x = e.clientX;
+                const w = window.innerWidth;
+                if (x < w * 0.35) {
+                  setActiveIdx((i) => Math.max(0, i - 1));
+                } else {
+                  if (activeIdx + 1 < viewing.items.length)
+                    setActiveIdx((i) => i + 1);
+                  else {
+                    clearInterval(progressRef.current);
+                    setViewing(null);
+                  }
+                }
+              }}
+            >
+              {currentItem.media_type === "video" ? (
+                <video
+                  key={currentItem.id}
+                  autoPlay
+                  playsInline
+                  className="w-full h-full object-contain"
+                  onEnded={() => {
+                    if (activeIdx + 1 < viewing.items.length)
+                      setActiveIdx((i) => i + 1);
+                    else {
+                      clearInterval(progressRef.current);
+                      setViewing(null);
+                    }
+                  }}
+                >
+                  <source src={currentItem.media_url} />
+                </video>
+              ) : (
+                <img
+                  src={currentItem.media_url}
+                  alt="Story"
+                  className="w-full h-full object-contain"
+                  loading="lazy"
+                />
+              )}
+
+              {/* Tap zones hint (invisible) */}
+              <div className="absolute inset-y-0 left-0 w-1/3" />
+              <div className="absolute inset-y-0 right-0 w-1/3" />
+            </div>
+
+            {/* Bottom: delete button */}
+            <div className="flex justify-center pb-8 pt-3">
+              {(viewing.user_id === currentUser?.uid ||
+                currentUser?.is_admin) && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleStoryDelete(currentItem.id);
+                  }}
+                  className="text-red-300 hover:text-red-400 text-sm bg-black/30 px-4 py-2 rounded-full"
+                >
+                  🗑 Удалить сторис
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </>
   );
 };
@@ -715,7 +762,10 @@ const ExerciseModal = ({ onDone }) => {
       ];
       const mime =
         mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || "";
-      const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+      const recorder = new MediaRecorder(
+        stream,
+        mime ? { mimeType: mime } : {},
+      );
       chunksRef.current = [];
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
@@ -804,8 +854,8 @@ const ExerciseModal = ({ onDone }) => {
         {phase === "idle" && (
           <>
             <p className="text-sm text-gray-500 mb-4">
-              Нажми кнопку — мы запишем видео твоей тренировки и опубликуем его в
-              ленту, чтобы разблокировать её.
+              Нажми кнопку — мы запишем видео твоей тренировки и опубликуем его
+              в ленту, чтобы разблокировать её.
             </p>
             <button
               onClick={startRecording}
@@ -1102,7 +1152,14 @@ const TEAR_CSS = `
   }
 `;
 
-const Post = ({ post, currentUser, onLike, onAddComment, onVote, onDelete }) => {
+const Post = ({
+  post,
+  currentUser,
+  onLike,
+  onAddComment,
+  onVote,
+  onDelete,
+}) => {
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
@@ -1173,28 +1230,68 @@ const Post = ({ post, currentUser, onLike, onAddComment, onVote, onDelete }) => 
     const h = postHeight || 160;
     const cardJSX = (
       <div style={{ width: "100%", height: h }}>
-        <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg overflow-hidden" style={{ height: h }}>
+        <div
+          className="bg-white/95 backdrop-blur rounded-2xl shadow-lg overflow-hidden"
+          style={{ height: h }}
+        >
           <div className="flex items-center gap-3 p-4">
-            {post.avatar
-              ? <img src={post.avatar} alt="" className="w-10 h-10 rounded-full object-cover border-2 border-purple-200" />
-              : <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-sm">{post.username?.charAt(0)?.toUpperCase()}</div>
-            }
+            {post.avatar ? (
+              <img
+                src={post.avatar}
+                alt=""
+                className="w-10 h-10 rounded-full object-cover border-2 border-purple-200"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-sm">
+                {post.username?.charAt(0)?.toUpperCase()}
+              </div>
+            )}
             <div>
               <p className="font-semibold text-gray-800">@{post.username}</p>
-              <p className="text-xs text-gray-400">{new Date(post.created_at).toLocaleString("ru-RU")}</p>
+              <p className="text-xs text-gray-400">
+                {new Date(post.created_at).toLocaleString("ru-RU")}
+              </p>
             </div>
           </div>
-          {post.content && <p className="px-4 pb-2 text-gray-800 text-sm whitespace-pre-wrap">{post.content}</p>}
-          {post.image && <img src={post.image} alt="" className="w-full max-h-40 object-cover" />}
+          {post.content && (
+            <p className="px-4 pb-2 text-gray-800 text-sm whitespace-pre-wrap">
+              {post.content}
+            </p>
+          )}
+          {post.image && (
+            <img
+              src={post.image}
+              alt=""
+              className="w-full max-h-40 object-cover"
+            />
+          )}
         </div>
       </div>
     );
     return (
       <>
         <style>{TEAR_CSS}</style>
-        <div style={{ position: "relative", height: h, marginBottom: 16, overflow: "visible", pointerEvents: "none" }}>
-          <div className="post-tear-top" style={{ position: "absolute", inset: 0 }}>{cardJSX}</div>
-          <div className="post-tear-bottom" style={{ position: "absolute", inset: 0 }}>{cardJSX}</div>
+        <div
+          style={{
+            position: "relative",
+            height: h,
+            marginBottom: 16,
+            overflow: "visible",
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            className="post-tear-top"
+            style={{ position: "absolute", inset: 0 }}
+          >
+            {cardJSX}
+          </div>
+          <div
+            className="post-tear-bottom"
+            style={{ position: "absolute", inset: 0 }}
+          >
+            {cardJSX}
+          </div>
         </div>
       </>
     );
@@ -1207,257 +1304,264 @@ const Post = ({ post, currentUser, onLike, onAddComment, onVote, onDelete }) => 
         ref={postRef}
         className={`bg-white/95 backdrop-blur rounded-2xl shadow-md mb-4 overflow-hidden${tearPhase === "shaking" ? " post-shaking" : ""}`}
       >
-      {/* Header */}
-      <div className="flex items-center gap-3 p-4">
-        <Link to={`/profile/${post.author_id}`}>
-          {post.avatar ? (
-            <img
-              src={post.avatar}
-              alt={post.username}
-              loading="lazy"
-              className="w-10 h-10 rounded-full object-cover border-2 border-purple-200"
-            />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-sm">
-              {post.username?.charAt(0)?.toUpperCase()}
-            </div>
-          )}
-        </Link>
-        <div>
-          <Link
-            to={`/profile/${post.author_id}`}
-            className="font-semibold text-gray-800 hover:text-purple-600"
-          >
-            @{post.username}
+        {/* Header */}
+        <div className="flex items-center gap-3 p-4">
+          <Link to={`/profile/${post.author_id}`}>
+            {post.avatar ? (
+              <img
+                src={post.avatar}
+                alt={post.username}
+                loading="lazy"
+                className="w-10 h-10 rounded-full object-cover border-2 border-purple-200"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-sm">
+                {post.username?.charAt(0)?.toUpperCase()}
+              </div>
+            )}
           </Link>
-          <p className="text-xs text-gray-400">
-            {new Date(post.created_at).toLocaleString("ru-RU")}
-          </p>
+          <div>
+            <Link
+              to={`/profile/${post.author_id}`}
+              className="font-semibold text-gray-800 hover:text-purple-600"
+            >
+              @{post.username}
+            </Link>
+            <p className="text-xs text-gray-400">
+              {new Date(post.created_at).toLocaleString("ru-RU")}
+            </p>
+          </div>
+          {(post.author_id === currentUser?.uid || currentUser?.is_admin) && (
+            <button
+              onClick={handleDelete}
+              className={`ml-auto text-xl px-2 ${
+                post.author_id === currentUser?.uid
+                  ? "text-gray-300 hover:text-red-500"
+                  : "text-red-400 hover:text-red-600"
+              }`}
+              title={
+                post.author_id === currentUser?.uid
+                  ? "Удалить пост"
+                  : "Удалить как администратор"
+              }
+            >
+              🗑
+            </button>
+          )}
         </div>
-        {(post.author_id === currentUser?.uid || currentUser?.is_admin) && (
+
+        {/* Content */}
+        {post.content && (
+          <p className="px-4 pb-3 text-gray-800 whitespace-pre-wrap">
+            {post.content}
+          </p>
+        )}
+
+        {/* Media */}
+        {post.image && (
+          <img
+            src={post.image}
+            alt="Post"
+            loading="lazy"
+            className="w-full max-h-96 object-cover"
+          />
+        )}
+        {post.video && (
+          <AutoVideo src={post.video} className="w-full max-h-96 bg-black" />
+        )}
+
+        {/* Poll */}
+        {post.poll_data && pollOptions && (
+          <div className="px-4 pb-3">
+            <p className="font-semibold text-gray-700 mb-2">
+              📊 {post.poll_data.question}
+            </p>
+            {pollOptions.map((opt, i) => {
+              const pct = totalVotes
+                ? Math.round((opt.votes / totalVotes) * 100)
+                : 0;
+              const isMy = userVoted && myVote === i;
+              return (
+                <button
+                  key={i}
+                  disabled={userVoted}
+                  onClick={() => onVote(post.id, i)}
+                  className={`w-full mb-2 relative overflow-hidden rounded-full border text-left transition-all ${
+                    userVoted
+                      ? "border-purple-200 cursor-default"
+                      : "border-purple-300 hover:bg-purple-50"
+                  } ${isMy ? "ring-2 ring-purple-500" : ""}`}
+                >
+                  {userVoted && (
+                    <div
+                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-200 to-pink-200"
+                      style={{ width: `${pct}%` }}
+                    />
+                  )}
+                  <div className="relative flex items-center justify-between px-4 py-2 text-sm text-gray-700">
+                    <span>
+                      {isMy && "✓ "}
+                      {opt.text}
+                    </span>
+                    {userVoted && (
+                      <span className="text-xs font-semibold text-purple-700">
+                        {pct}% ({opt.votes})
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+            {userVoted && (
+              <p className="text-xs text-gray-400 mt-1">
+                Всего голосов: {totalVotes}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-6">
           <button
-            onClick={handleDelete}
-            className={`ml-auto text-xl px-2 ${
-              post.author_id === currentUser?.uid
-                ? "text-gray-300 hover:text-red-500"
-                : "text-red-400 hover:text-red-600"
+            onClick={() => onLike(post.id)}
+            className={`flex items-center gap-1.5 font-medium transition-all ${
+              liked
+                ? "text-red-500 scale-110"
+                : "text-gray-400 hover:text-red-400"
             }`}
-            title={
-              post.author_id === currentUser?.uid
-                ? "Удалить пост"
-                : "Удалить как администратор"
-            }
           >
-            🗑
+            {liked ? "❤️" : "🤍"}
+            <span>{post.likes?.length || 0}</span>
           </button>
+          <button
+            onClick={toggleComments}
+            className="flex items-center gap-1.5 text-gray-400 hover:text-purple-500 font-medium"
+          >
+            💬 <span>{post.comments_count}</span>
+          </button>
+        </div>
+
+        {/* Comments */}
+        {showComments && (
+          <div className="px-4 pb-4 border-t border-gray-100">
+            <div className="relative flex gap-2 mt-3 items-center">
+              {showStickers && (
+                <StickerPicker
+                  onPick={insertSticker}
+                  onClose={() => setShowStickers(false)}
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => setShowStickers((s) => !s)}
+                className="text-2xl text-gray-400 hover:text-purple-500"
+                title="Стикеры"
+              >
+                😊
+              </button>
+              <label
+                className="cursor-pointer text-gray-400 hover:text-purple-500"
+                title="Прикрепить файл"
+              >
+                📎
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => setCommentFile(e.target.files[0])}
+                />
+              </label>
+              <input
+                className="flex-1 border border-gray-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                placeholder="Написать комментарий..."
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submitComment()}
+              />
+              <button
+                onClick={submitComment}
+                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-full text-sm font-semibold hover:shadow"
+              >
+                OK
+              </button>
+            </div>
+            {commentFile && (
+              <div className="mt-2 flex items-center gap-2 text-xs text-purple-600 bg-purple-50 rounded-lg px-2 py-1">
+                <span>📎 {commentFile.name}</span>
+                <button
+                  onClick={() => setCommentFile(null)}
+                  className="ml-auto text-red-400"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {loadingComments && (
+              <p className="text-center text-gray-400 text-sm mt-3">
+                Загрузка...
+              </p>
+            )}
+
+            <div className="mt-3 space-y-3">
+              {comments.map((c) => (
+                <div key={c.id} className="flex gap-2 items-start">
+                  {c.avatar ? (
+                    <img
+                      src={c.avatar}
+                      alt=""
+                      loading="lazy"
+                      className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-purple-200 flex items-center justify-center text-xs font-bold text-purple-700 flex-shrink-0">
+                      {c.username?.charAt(0)?.toUpperCase()}
+                    </div>
+                  )}
+                  <div className="bg-gray-50 rounded-xl px-3 py-2 flex-1">
+                    <Link
+                      to={`/profile/${c.author_id}`}
+                      className="text-xs font-semibold text-purple-600 hover:underline"
+                    >
+                      @{c.username}
+                    </Link>
+                    {c.text && (
+                      <p className="text-sm text-gray-700 mt-0.5 break-words">
+                        {c.text}
+                      </p>
+                    )}
+                    {c.file_url && c.file_type === "image" && (
+                      <img
+                        src={c.file_url}
+                        alt=""
+                        className="mt-2 rounded-lg max-h-48"
+                      />
+                    )}
+                    {c.file_url && c.file_type === "video" && (
+                      <video
+                        src={c.file_url}
+                        controls
+                        className="mt-2 rounded-lg max-h-48"
+                      />
+                    )}
+                    {c.file_url &&
+                      c.file_type !== "image" &&
+                      c.file_type !== "video" && (
+                        <a
+                          href={c.file_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-block text-xs text-purple-600 hover:underline"
+                        >
+                          📎 Скачать файл
+                        </a>
+                      )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
-
-      {/* Content */}
-      {post.content && (
-        <p className="px-4 pb-3 text-gray-800 whitespace-pre-wrap">
-          {post.content}
-        </p>
-      )}
-
-      {/* Media */}
-      {post.image && (
-        <img
-          src={post.image}
-          alt="Post"
-          loading="lazy"
-          className="w-full max-h-96 object-cover"
-        />
-      )}
-      {post.video && (
-        <AutoVideo src={post.video} className="w-full max-h-96 bg-black" />
-      )}
-
-      {/* Poll */}
-      {post.poll_data && pollOptions && (
-        <div className="px-4 pb-3">
-          <p className="font-semibold text-gray-700 mb-2">
-            📊 {post.poll_data.question}
-          </p>
-          {pollOptions.map((opt, i) => {
-            const pct = totalVotes ? Math.round((opt.votes / totalVotes) * 100) : 0;
-            const isMy = userVoted && myVote === i;
-            return (
-              <button
-                key={i}
-                disabled={userVoted}
-                onClick={() => onVote(post.id, i)}
-                className={`w-full mb-2 relative overflow-hidden rounded-full border text-left transition-all ${
-                  userVoted
-                    ? "border-purple-200 cursor-default"
-                    : "border-purple-300 hover:bg-purple-50"
-                } ${isMy ? "ring-2 ring-purple-500" : ""}`}
-              >
-                {userVoted && (
-                  <div
-                    className="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-200 to-pink-200"
-                    style={{ width: `${pct}%` }}
-                  />
-                )}
-                <div className="relative flex items-center justify-between px-4 py-2 text-sm text-gray-700">
-                  <span>
-                    {isMy && "✓ "}
-                    {opt.text}
-                  </span>
-                  {userVoted && (
-                    <span className="text-xs font-semibold text-purple-700">
-                      {pct}% ({opt.votes})
-                    </span>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-          {userVoted && (
-            <p className="text-xs text-gray-400 mt-1">
-              Всего голосов: {totalVotes}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-6">
-        <button
-          onClick={() => onLike(post.id)}
-          className={`flex items-center gap-1.5 font-medium transition-all ${
-            liked
-              ? "text-red-500 scale-110"
-              : "text-gray-400 hover:text-red-400"
-          }`}
-        >
-          {liked ? "❤️" : "🤍"}
-          <span>{post.likes?.length || 0}</span>
-        </button>
-        <button
-          onClick={toggleComments}
-          className="flex items-center gap-1.5 text-gray-400 hover:text-purple-500 font-medium"
-        >
-          💬 <span>{post.comments_count}</span>
-        </button>
-      </div>
-
-      {/* Comments */}
-      {showComments && (
-        <div className="px-4 pb-4 border-t border-gray-100">
-          <div className="relative flex gap-2 mt-3 items-center">
-            {showStickers && (
-              <StickerPicker
-                onPick={insertSticker}
-                onClose={() => setShowStickers(false)}
-              />
-            )}
-            <button
-              type="button"
-              onClick={() => setShowStickers((s) => !s)}
-              className="text-2xl text-gray-400 hover:text-purple-500"
-              title="Стикеры"
-            >
-              😊
-            </button>
-            <label className="cursor-pointer text-gray-400 hover:text-purple-500" title="Прикрепить файл">
-              📎
-              <input
-                type="file"
-                className="hidden"
-                onChange={(e) => setCommentFile(e.target.files[0])}
-              />
-            </label>
-            <input
-              className="flex-1 border border-gray-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-              placeholder="Написать комментарий..."
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && submitComment()}
-            />
-            <button
-              onClick={submitComment}
-              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-full text-sm font-semibold hover:shadow"
-            >
-              OK
-            </button>
-          </div>
-          {commentFile && (
-            <div className="mt-2 flex items-center gap-2 text-xs text-purple-600 bg-purple-50 rounded-lg px-2 py-1">
-              <span>📎 {commentFile.name}</span>
-              <button
-                onClick={() => setCommentFile(null)}
-                className="ml-auto text-red-400"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-
-          {loadingComments && (
-            <p className="text-center text-gray-400 text-sm mt-3">
-              Загрузка...
-            </p>
-          )}
-
-          <div className="mt-3 space-y-3">
-            {comments.map((c) => (
-              <div key={c.id} className="flex gap-2 items-start">
-                {c.avatar ? (
-                  <img
-                    src={c.avatar}
-                    alt=""
-                    loading="lazy"
-                    className="w-7 h-7 rounded-full object-cover flex-shrink-0"
-                  />
-                ) : (
-                  <div className="w-7 h-7 rounded-full bg-purple-200 flex items-center justify-center text-xs font-bold text-purple-700 flex-shrink-0">
-                    {c.username?.charAt(0)?.toUpperCase()}
-                  </div>
-                )}
-                <div className="bg-gray-50 rounded-xl px-3 py-2 flex-1">
-                  <Link
-                    to={`/profile/${c.author_id}`}
-                    className="text-xs font-semibold text-purple-600 hover:underline"
-                  >
-                    @{c.username}
-                  </Link>
-                  {c.text && (
-                    <p className="text-sm text-gray-700 mt-0.5 break-words">
-                      {c.text}
-                    </p>
-                  )}
-                  {c.file_url && c.file_type === "image" && (
-                    <img
-                      src={c.file_url}
-                      alt=""
-                      className="mt-2 rounded-lg max-h-48"
-                    />
-                  )}
-                  {c.file_url && c.file_type === "video" && (
-                    <video
-                      src={c.file_url}
-                      controls
-                      className="mt-2 rounded-lg max-h-48"
-                    />
-                  )}
-                  {c.file_url && c.file_type !== "image" && c.file_type !== "video" && (
-                    <a
-                      href={c.file_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-2 inline-block text-xs text-purple-600 hover:underline"
-                    >
-                      📎 Скачать файл
-                    </a>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
     </>
   );
 };
@@ -1536,9 +1640,16 @@ const GraffitiModal = ({ onClose, onPost }) => {
   };
 
   const COLORS = [
-    "#7c3aed", "#ec4899", "#ef4444", "#f97316",
-    "#eab308", "#22c55e", "#06b6d4", "#3b82f6",
-    "#6366f1", "#000000",
+    "#7c3aed",
+    "#ec4899",
+    "#ef4444",
+    "#f97316",
+    "#eab308",
+    "#22c55e",
+    "#06b6d4",
+    "#3b82f6",
+    "#6366f1",
+    "#000000",
   ];
 
   return (
@@ -1546,7 +1657,12 @@ const GraffitiModal = ({ onClose, onPost }) => {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col gap-3 p-4">
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-gray-800 text-lg">🎨 Граффити-стена</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">✕</button>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-700 text-2xl leading-none"
+          >
+            ✕
+          </button>
         </div>
 
         {/* Color palette */}
@@ -1554,7 +1670,10 @@ const GraffitiModal = ({ onClose, onPost }) => {
           {COLORS.map((c) => (
             <button
               key={c}
-              onClick={() => { setColor(c); setTool("pen"); }}
+              onClick={() => {
+                setColor(c);
+                setTool("pen");
+              }}
               className={`w-7 h-7 rounded-full border-2 transition-transform ${color === c && tool === "pen" ? "border-gray-700 scale-125" : "border-transparent"}`}
               style={{ background: c }}
             />
@@ -1577,10 +1696,16 @@ const GraffitiModal = ({ onClose, onPost }) => {
               className={`rounded-full flex items-center justify-center border-2 transition ${size === s ? "border-purple-500" : "border-gray-200"}`}
               style={{ width: s * 3 + 12, height: s * 3 + 12 }}
             >
-              <div className="rounded-full bg-gray-700" style={{ width: s, height: s }} />
+              <div
+                className="rounded-full bg-gray-700"
+                style={{ width: s, height: s }}
+              />
             </button>
           ))}
-          <button onClick={clearCanvas} className="ml-auto text-xs text-red-400 hover:text-red-600 font-semibold">
+          <button
+            onClick={clearCanvas}
+            className="ml-auto text-xs text-red-400 hover:text-red-600 font-semibold"
+          >
             🗑 Очистить
           </button>
         </div>
@@ -1705,7 +1830,11 @@ const CreatePost = ({ currentUser, onCreated }) => {
           {file && (
             <div className="mt-2 flex items-center gap-2 text-sm text-purple-600 bg-purple-50 rounded-lg px-3 py-2">
               <span>
-                {fileKind === "image" ? "📷" : fileKind === "video" ? "🎥" : "📎"}{" "}
+                {fileKind === "image"
+                  ? "📷"
+                  : fileKind === "video"
+                    ? "🎥"
+                    : "📎"}{" "}
                 {file.name}
               </span>
               <button
@@ -1721,7 +1850,9 @@ const CreatePost = ({ currentUser, onCreated }) => {
           {showPoll && (
             <div className="mt-3 bg-purple-50 rounded-xl p-3 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-purple-700">📊 Опрос</span>
+                <span className="text-xs font-semibold text-purple-700">
+                  📊 Опрос
+                </span>
                 <button
                   type="button"
                   onClick={() => {
@@ -1779,29 +1910,65 @@ const CreatePost = ({ currentUser, onCreated }) => {
 
           <div className="mt-3 space-y-2">
             <div className="flex items-center gap-3">
-              <label className="cursor-pointer text-gray-400 hover:text-purple-500" title="Фото">
+              <label
+                className="cursor-pointer text-gray-400 hover:text-purple-500"
+                title="Фото"
+              >
                 <PhotoIcon className="w-6 h-6" />
-                <input type="file" accept="image/*" className="hidden" onChange={(e) => setFile(e.target.files[0] || null)} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => setFile(e.target.files[0] || null)}
+                />
               </label>
-              <label className="cursor-pointer text-gray-400 hover:text-purple-500" title="Видео">
+              <label
+                className="cursor-pointer text-gray-400 hover:text-purple-500"
+                title="Видео"
+              >
                 <VideoCameraIcon className="w-6 h-6" />
-                <input type="file" accept="video/*" className="hidden" onChange={(e) => setFile(e.target.files[0] || null)} />
+                <input
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  onChange={(e) => setFile(e.target.files[0] || null)}
+                />
               </label>
-              <label className="cursor-pointer text-gray-400 hover:text-purple-500 text-xl" title="Любой файл">
+              <label
+                className="cursor-pointer text-gray-400 hover:text-purple-500 text-xl"
+                title="Любой файл"
+              >
                 📎
-                <input type="file" className="hidden" onChange={(e) => setFile(e.target.files[0] || null)} />
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => setFile(e.target.files[0] || null)}
+                />
               </label>
-              <button type="button" onClick={() => setShowPoll((s) => !s)}
-                className={`text-xl ${showPoll ? "text-purple-600" : "text-gray-400 hover:text-purple-500"}`} title="Опрос">
+              <button
+                type="button"
+                onClick={() => setShowPoll((s) => !s)}
+                className={`text-xl ${showPoll ? "text-purple-600" : "text-gray-400 hover:text-purple-500"}`}
+                title="Опрос"
+              >
                 📊
               </button>
-              <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("lis:open-graffiti"))}
-                className="text-xl text-gray-400 hover:text-purple-500 transition-colors" title="Граффити">
+              <button
+                type="button"
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent("lis:open-graffiti"))
+                }
+                className="text-xl text-gray-400 hover:text-purple-500 transition-colors"
+                title="Граффити"
+              >
                 🎨
               </button>
             </div>
-            <button type="submit" disabled={loading}
-              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2.5 rounded-full font-semibold text-sm hover:shadow-lg disabled:opacity-50 transition-all">
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2.5 rounded-full font-semibold text-sm hover:shadow-lg disabled:opacity-50 transition-all"
+            >
               {loading ? "Публикую..." : "Опубликовать"}
             </button>
           </div>
@@ -1826,9 +1993,12 @@ export default function Feed() {
   const [locked, setLocked] = useState(false);
   const [lockUntil, setLockUntil] = useState(null);
 
-  // Premium state
-  const [premium, setPremium] = useState(false);
-  const [premiumUntil, setPremiumUntil] = useState(null);
+  // Premium state — from context (single source of truth)
+  const {
+    isPremium: premium,
+    premiumExpires: premiumUntil,
+    refresh: refreshPremium,
+  } = usePremium();
   const [showPremiumModal, setShowPremiumModal] = useState(false);
 
   // Challenge creation modal
@@ -1843,25 +2013,12 @@ export default function Feed() {
     return () => window.removeEventListener("lis:open-graffiti", handler);
   }, []);
 
-  useEffect(() => {
-    premiumService
-      .getStatus()
-      .then((d) => {
-        setPremium(!!d.premium);
-        setPremiumUntil(d.premiumUntil || null);
-      })
-      .catch(() => {});
-  }, []);
-
   const handlePremiumActivated = () => {
     setShowPremiumModal(false);
     setLocked(false);
     setLockUntil(null);
     setElapsed(0);
-    premiumService.getStatus().then((d) => {
-      setPremium(!!d.premium);
-      setPremiumUntil(d.premiumUntil || null);
-    });
+    refreshPremium();
   };
 
   const loadFeed = useCallback(async () => {
@@ -2007,7 +2164,12 @@ export default function Feed() {
       {/* Premium banner / Timer progress bar */}
       {premium ? (
         <div className="mb-3 flex items-center justify-between bg-gradient-to-r from-purple-500/30 to-pink-500/30 backdrop-blur rounded-xl px-3 py-2 text-white text-xs">
-          <span>💎 Премиум активен{premiumUntil ? ` до ${new Date(premiumUntil).toLocaleDateString("ru-RU")}` : ""}</span>
+          <span>
+            💎 Премиум активен
+            {premiumUntil
+              ? ` до ${new Date(premiumUntil).toLocaleDateString("ru-RU")}`
+              : ""}
+          </span>
           <button
             onClick={() => setShowChallengeModal(true)}
             className="text-pink-200 font-semibold hover:text-pink-100"
@@ -2015,36 +2177,38 @@ export default function Feed() {
             ✏ Задание
           </button>
         </div>
-      ) : !locked && (
-        <div className="mb-3">
-          <div className="flex justify-between items-center text-xs text-white/70 mb-1 gap-2">
-            <span>
-              ⏱ {timerMins}:{timerSecs.toString().padStart(2, "0")}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowChallengeModal(true)}
-                className="text-pink-200 font-semibold hover:text-pink-100"
-                title="Придумать задание для других"
-              >
-                ✏ Задание
-              </button>
-              <button
-                onClick={() => setShowPremiumModal(true)}
-                className="text-yellow-200 font-semibold hover:text-yellow-100"
-              >
-                💎 Премиум
-              </button>
+      ) : (
+        !locked && (
+          <div className="mb-3">
+            <div className="flex justify-between items-center text-xs text-white/70 mb-1 gap-2">
+              <span>
+                ⏱ {timerMins}:{timerSecs.toString().padStart(2, "0")}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowChallengeModal(true)}
+                  className="text-pink-200 font-semibold hover:text-pink-100"
+                  title="Придумать задание для других"
+                >
+                  ✏ Задание
+                </button>
+                <button
+                  onClick={() => setShowPremiumModal(true)}
+                  className="text-yellow-200 font-semibold hover:text-yellow-100"
+                >
+                  💎 Премиум
+                </button>
+              </div>
+              <span>10:00</span>
             </div>
-            <span>10:00</span>
+            <div className="h-1.5 bg-white/30 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-purple-300 to-pink-400 transition-all duration-1000"
+                style={{ width: `${timerPercent}%` }}
+              />
+            </div>
           </div>
-          <div className="h-1.5 bg-white/30 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-purple-300 to-pink-400 transition-all duration-1000"
-              style={{ width: `${timerPercent}%` }}
-            />
-          </div>
-        </div>
+        )
       )}
 
       {/* Modals */}

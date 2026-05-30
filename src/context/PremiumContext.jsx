@@ -27,8 +27,9 @@ export function PremiumProvider({ children }) {
 
     const checkPremium = async () => {
       try {
+        const token = localStorage.getItem("token");
         const res = await fetch("/api/premium/status", {
-          headers: { "X-User-Id": currentUser.uid },
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
 
         if (res.ok) {
@@ -47,11 +48,28 @@ export function PremiumProvider({ children }) {
     checkPremium();
   }, [currentUser]);
 
+  const refresh = () => {
+    if (!currentUser) return;
+    const token = localStorage.getItem("token");
+    fetch("/api/premium/status", {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) {
+          setIsPremium(data.isPremium || false);
+          setPremiumExpires(data.expiresAt || null);
+        }
+      })
+      .catch(() => {});
+  };
+
   const value = {
     isPremium,
     premiumExpires,
     loading,
-    setIsPremium, // для тестов/отладки
+    refresh,
+    setIsPremium,
   };
 
   return (

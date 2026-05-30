@@ -82,7 +82,13 @@ const MessageBubble = ({ message, isOwn, onDelete, isPremiumOwn }) => (
   </div>
 );
 
-const ConversationItem = ({ conv, isActive, onClick, currentUserId, onDelete }) => {
+const ConversationItem = ({
+  conv,
+  isActive,
+  onClick,
+  currentUserId,
+  onDelete,
+}) => {
   const [otherUser, setOtherUser] = useState(null);
 
   useEffect(() => {
@@ -573,9 +579,15 @@ export default function Messages() {
                 <>
                   <button
                     onClick={() => {
-                      if (!isPremium) { setShowCallLock(true); return; }
-                      const other = selectedConv.participants?.find((p) => p !== user?.uid);
-                      if (other) setActiveCall({ type: "audio", targetId: other });
+                      if (!isPremium) {
+                        setShowCallLock(true);
+                        return;
+                      }
+                      const other = selectedConv.participants?.find(
+                        (p) => p !== user?.uid,
+                      );
+                      if (other)
+                        setActiveCall({ type: "audio", targetId: other });
                     }}
                     title="Аудиозвонок"
                     className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-all text-base"
@@ -584,9 +596,15 @@ export default function Messages() {
                   </button>
                   <button
                     onClick={() => {
-                      if (!isPremium) { setShowCallLock(true); return; }
-                      const other = selectedConv.participants?.find((p) => p !== user?.uid);
-                      if (other) setActiveCall({ type: "video", targetId: other });
+                      if (!isPremium) {
+                        setShowCallLock(true);
+                        return;
+                      }
+                      const other = selectedConv.participants?.find(
+                        (p) => p !== user?.uid,
+                      );
+                      if (other)
+                        setActiveCall({ type: "video", targetId: other });
                     }}
                     title="Видеозвонок"
                     className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-all text-base"
@@ -638,7 +656,10 @@ export default function Messages() {
                   </button>
                 </div>
               )}
-              <form onSubmit={sendMessage} className="relative flex items-center gap-2">
+              <form
+                onSubmit={sendMessage}
+                className="relative flex items-center gap-2"
+              >
                 {showStickers && (
                   <StickerPicker
                     onPick={(s) => {
@@ -664,11 +685,14 @@ export default function Messages() {
                     onChange={(e) => {
                       const file = e.target.files[0];
                       if (!file) return;
-                      const maxSize = isPremium ? 500 * 1024 * 1024 : 10 * 1024 * 1024;
+                      const maxSize = isPremium
+                        ? 500 * 1024 * 1024
+                        : 10 * 1024 * 1024;
                       if (file.size > maxSize) {
-                        alert(isPremium
-                          ? "Файл слишком большой (макс 500 МБ)"
-                          : `Файл слишком большой (макс 10 МБ). Оформите Premium для файлов до 500 МБ`
+                        alert(
+                          isPremium
+                            ? "Файл слишком большой (макс 500 МБ)"
+                            : `Файл слишком большой (макс 10 МБ). Оформите Premium для файлов до 500 МБ`,
                         );
                         e.target.value = "";
                         return;
@@ -737,7 +761,13 @@ export default function Messages() {
       {showCallLock && (
         <PremiumLockModal
           feature="Звонки"
-          featureList={["📞 Аудио и видео звонки", "📎 Файлы до 500 МБ", "📸 Загрузка сторис", "👁 Кто смотрел профиль", "⭐ Приоритет в ленте"]}
+          featureList={[
+            "📞 Аудио и видео звонки",
+            "📎 Файлы до 500 МБ",
+            "📸 Загрузка сторис",
+            "👁 Кто смотрел профиль",
+            "⭐ Приоритет в ленте",
+          ]}
           onClose={() => setShowCallLock(false)}
         />
       )}

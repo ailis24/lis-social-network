@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { usePremium } from "../context/PremiumContext";
 import { notificationService, friendService } from "../services";
+import PremiumLockModal from "./PremiumLockModal";
+import { playNotificationSound } from "../utils/sounds";
 
 function NotifItem({ n, onAccepted, onDeclined }) {
   const [accepted, setAccepted] = useState(n.type === "friend_accepted");
@@ -86,24 +89,34 @@ function NotifItem({ n, onAccepted, onDeclined }) {
 
 export default function Header() {
   const { user } = useAuth();
+  const { isPremium } = usePremium();
   const navigate = useNavigate();
   const location = useLocation();
   const [unread, setUnread] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const [showNotifs, setShowNotifs] = useState(false);
+  const [showMarketLock, setShowMarketLock] = useState(false);
   const notifRef = useRef();
+  const prevUnreadRef = useRef(0);
+  const firstLoadRef = useRef(true);
 
   useEffect(() => {
     if (!user) return;
-    const fetch = async () => {
+    const load = async () => {
       try {
         const data = await notificationService.getNotifications();
         setNotifications(data);
-        setUnread(data.filter((n) => !n.is_read).length);
+        const count = data.filter((n) => !n.is_read).length;
+        setUnread(count);
+        if (!firstLoadRef.current && count > prevUnreadRef.current) {
+          playNotificationSound();
+        }
+        firstLoadRef.current = false;
+        prevUnreadRef.current = count;
       } catch {}
     };
-    fetch();
-    const iv = setInterval(fetch, 30000);
+    load();
+    const iv = setInterval(load, 15000);
     return () => clearInterval(iv);
   }, [user]);
 
@@ -185,20 +198,20 @@ export default function Header() {
             >
               💬
             </Link>
-            <Link to={`/profile/${user?.uid}`} className="flex items-center">
-              {user?.avatar ? (
-                <img
-                  src={user.avatar}
-                  alt={user.username}
-                  loading="lazy"
-                  className="w-8 h-8 rounded-full object-cover border-2 border-white/50"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-white/30 flex items-center justify-center text-white font-bold text-sm">
-                  {user?.username?.charAt(0)?.toUpperCase()}
-                </div>
-              )}
-            </Link>
+            {/* Marketplace icon — replaces profile avatar in header */}
+            <button
+              onClick={() =>
+                isPremium ? navigate("/marketplace") : setShowMarketLock(true)
+              }
+              title="Маркетплейс"
+              className={`w-9 h-9 rounded-full flex items-center justify-center text-lg transition-all ${
+                isPremium
+                  ? "bg-white/20 hover:bg-white/30"
+                  : "bg-white/10 opacity-60"
+              }`}
+            >
+              {isPremium ? "🏪" : "🔒"}
+            </button>
           </div>
         </div>
       </header>
@@ -263,7 +276,11 @@ export default function Header() {
                         onDeclined={(senderId) => {
                           setNotifications((prev) =>
                             prev.filter(
-                              (x) => !(x.sender_id === senderId && x.type === "friend_request"),
+                              (x) =>
+                                !(
+                                  x.sender_id === senderId &&
+                                  x.type === "friend_request"
+                                ),
                             ),
                           );
                         }}
@@ -286,6 +303,13 @@ export default function Header() {
 
       {/* Spacer so content isn't hidden under bottom nav */}
       <div className="h-16" />
+
+      {showMarketLock && (
+        <PremiumLockModal
+          feature="Маркетплейс"
+          onClose={() => setShowMarketLock(false)}
+        />
+      )}
     </>
   );
 }
